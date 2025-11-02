@@ -91,15 +91,49 @@
     return out;
   }
   function normalizeSheetUrl(u){ return (u||'').trim().replace(/\/pubhtml(\?.*)?$/i,'/pub?output=csv'); }
-  async function loadData(){
-    const eff = normalizeSheetUrl(CFG.sheet);
-    if(!eff) return SAMPLE_DATA;
+ async function loadData(){
+  const webapp = (window.WEBAPP_URL || '').replace(/\/$/,'');
+  // 1) Try JSONP rows from Apps Script first (works for domain users; no CORS)
+  if (webapp){
     try{
-      if(/output=csv/i.test(eff)){ const t=await fetch(eff).then(r=>r.text()); return csvToObjects(t); }
-      const r=await fetch(eff); if(!r.ok) throw new Error('HTTP '+r.status);
-      const j=await r.json(); return Array.isArray(j.data)?j.data:(Array.isArray(j)?j:[]);
-    }catch(e){ console.warn('Fetch failed, using SAMPLE_DATA:', e); return SAMPLE_DATA; }
+      const data = await new Promise((resolve, reject)=>{
+        const cb = '__rows_cb_' + Date.now();
+        window[cb] = (resp)=>{
+          try {
+            delete window[cb];
+            if (resp && resp.ok && Array.isArray(resp.data)) resolve(resp.data);
+            else reject(new Error('rows: bad response'));
+          } catch(e){ reject(e); }
+        };
+        const s = document.createElement('script');
+        s.src = webapp + '?fn=rows&callback=' + cb;
+        s.onerror = function(){ delete window[cb]; reject(new Error('rows: jsonp error')); };
+        document.head.appendChild(s);
+      });
+      return data;
+    }catch(e){
+      console.warn('WebApp rows failed, falling back to CSV:', e);
+    }
   }
+
+  // 2) Fallback to CSV if your admin ever allows publish-to-web again
+  const eff = normalizeSheetUrl(CFG.sheet);
+  if(!eff) return SAMPLE_DATA;
+  try{
+    if(/output=csv/i.test(eff)){
+      const t = await fetch(eff).then(r => r.text());
+      return csvToObjects(t);
+    }
+    const r = await fetch(eff);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j = await r.json();
+    return Array.isArray(j.data) ? j.data : (Array.isArray(j) ? j : []);
+  }catch(e){
+    console.warn('Fetch failed, using SAMPLE_DATA:', e);
+    return SAMPLE_DATA;
+  }
+}
+
 
   const SAMPLE_DATA=[
     {"Business Name":"Sample Plaza","Address":"73 Main Street","Knox Box Location":"Alpha side","Closest Hydrant":"Main & Park",
