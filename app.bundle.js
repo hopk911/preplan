@@ -43,15 +43,16 @@ function buildImgWithFallback(srcOrId, cls, size){
   var loadThumbsWithin = function(){ /* no-op in drive-only mode */ };
 // ---------- Sections & routing ----------
   const SECTION_CONFIG = [
-    { id:'other',     label:'Other',     color:'other'     },
-    { id:'fire',      label:'Fire',      color:'fire'      },
-    { id:'elevators', label:'Elevators', color:'elevators' },
-    { id:'ems',       label:'EMS',       color:'ems'       },
-    { id:'water',     label:'Water',     color:'water'     },
-    { id:'electric',  label:'Electric',  color:'electric'  },
-    { id:'gas',       label:'Gas',       color:'gas'       },
-    { id:'hazmat',    label:'Hazmat',    color:'hazmat'    }
-  ];
+  { id:'other',     label:'Other',     color:'other'     },
+  { id:'bldg',      label:'Building Construction', color:'other' },
+  { id:'fire',      label:'Fire',      color:'fire'      },
+  { id:'elevators', label:'Elevators', color:'elevators' },
+  { id:'ems',       label:'EMS',       color:'ems'       },
+  { id:'water',     label:'Water',     color:'water'     },
+  { id:'electric',  label:'Electric',  color:'electric'  },
+  { id:'gas',       label:'Gas',       color:'gas'       },
+  { id:'hazmat',    label:'Hazmat',    color:'hazmat'    }
+];
 
   const TABLE_COLUMNS = [
     { key:'__photo__', label:'Photo',            getter:r=>firstPhotoWithSection(r) },
@@ -71,7 +72,14 @@ function buildImgWithFallback(srcOrId, cls, size){
   };
 
   const FIELD_PATTERNS = [
-    [/^Remote Alarm Location:?$/i,'fire'],
+  [/^\s*Number of Stories\s*:?\s*$/i,            'bldg'],
+[/^\s*Occupancy\s*:?\s*$/i,                    'bldg'],
+[/^\s*Occupancy Notes\s*:?\s*$/i,              'bldg'],
+[/^\s*Construction Type\s*:?\s*$/i,            'bldg'],
+[/^\s*Construction Type Notes\s*:?\s*$/i,      'bldg'],
+[/^\s*Roof Type\s*:?\s*$/i,                    'bldg'],
+[/^\s*Basement\s*:?\s*$/i,                     'bldg'],,
+[/^Remote Alarm Location:?$/i,'fire'],
     [/^Sprinkler Main Shutoff Location:?$/i,'fire'],
     [/^Roof Type:?$/i,'other'],
     [/^Roof Access Location:?$/i,'other'],
