@@ -29,10 +29,15 @@ console.log('[bundle] JSONP rows build is active');
   const id = extractDriveId(srcOrId);
   const driveThumb = id ? ('https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w' + w) : String(srcOrId);
   const webapp = (window.WEBAPP_URL||'').replace(/\/$/,'');
-  const proxied = id && webapp ? (webapp + '?id=' + encodeURIComponent(id) + '&w=' + w) : driveThumb;
+  const good = !!(webapp && /^https:\/\/script\.google\.com\//.test(webapp) && webapp.length > 40);
+  const proxied = (good && id) ? (webapp + '?id=' + encodeURIComponent(id) + '&w=' + w) : '';
   const klass = cls ? (' ' + cls) : '';
-  return '<img src="' + proxied + '" class="thumb' + klass + '" loading="lazy" alt="photo">';
-}
+  // Drive-first; if it fails, try proxy (if configured)
+  if (proxied) {
+    return '<img src="' + driveThumb + '" onerror="this.onerror=null;this.src=\'' + proxied + '\'" class="thumb' + klass + '" loading="lazy" alt="photo">';
+  }
+  return '<img src="' + driveThumb + '" class="thumb' + klass + '" loading="lazy" alt="photo">';
+}}
   function loadThumbsWithin(){ /* no-op in drive-only mode */ }
 
   // ---------- Sections & routing ----------
