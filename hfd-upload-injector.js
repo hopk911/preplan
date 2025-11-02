@@ -127,7 +127,7 @@ function sectionForField(label){
       const res = await fetch(window.WEBAPP_URL, { method: 'POST', body: fd, credentials: 'omit' });
       const json = await res.json();
       if (res.ok && json && json.ok) return json;
-      if (json && /No file field found/i.test(String(json.error||''))) throw new Error('fallback-b64');
+      if (json && /No file field/i.test(String(json.error||''))) throw new Error('fallback-b64');
       throw new Error(json && json.error || ('HTTP ' + res.status));
     }catch(err){
       if (String(err.message) !== 'fallback-b64') throw err;
