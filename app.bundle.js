@@ -23,7 +23,8 @@ console.log('[bundle] JSONP rows build is active');
     m = s.match(/^([a-zA-Z0-9_-]{20,})$/);         if (m) return m[1];
     return '';
   }
-  function buildImgWithFallback(srcOrId, cls, size){
+  
+function buildImgWithFallback(srcOrId, cls, size){
   if (!srcOrId) return '';
   const w = size || 600;
   const id = extractDriveId(srcOrId);
@@ -33,15 +34,14 @@ console.log('[bundle] JSONP rows build is active');
   const proxied = (good && id) ? (webapp + '?id=' + encodeURIComponent(id) + '&w=' + w) : '';
   const klass = cls ? (' ' + cls) : '';
   if (proxied) {
-    return '<img src="' + proxied + '" onerror="this.onerror=null;this.src=\'' + driveThumb.replace(/\'/g, "\'") + '\'" class="thumb' + klass + '" loading="lazy" alt="photo">';
+    // Proxy FIRST; if it fails, fall back to Drive thumb
+    const onerr = "this.onerror=null;this.src='" + driveThumb.replace("'", "\\'") + "'";
+    return '<img src="' + proxied + '" onerror="' + onerr + '" class="thumb' + klass + '" loading="lazy" alt="photo">';
   }
   return '<img src="' + driveThumb + '" class="thumb' + klass + '" loading="lazy" alt="photo">';
 }
-return '<img src="' + driveThumb + '" class="thumb' + klass + '" loading="lazy" alt="photo">';
-}
-  function loadThumbsWithin(){ /* no-op in drive-only mode */ }
-
-  // ---------- Sections & routing ----------
+  var loadThumbsWithin = function(){ /* no-op in drive-only mode */ };
+// ---------- Sections & routing ----------
   const SECTION_CONFIG = [
     { id:'other',     label:'Other',     color:'other'     },
     { id:'fire',      label:'Fire',      color:'fire'      },
