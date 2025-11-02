@@ -1,68 +1,79 @@
 /**
- * HFD Preplan Web App (ASCII-safe)
+ * HFD Preplan Web App (CORB-safe image proxy + rows + save)
  * Routes:
- *   /exec?id=<fileId>&w=800
- *   /exec?fn=img&id=<fileId>&w=800
- *   /exec?fn=img&u=<url>&w=800
- *   /exec?fn=save&callback=cb&payload=<json>   (GET JSONP)
- *   POST /exec with fn=save & payload=<json>   (POST)
+ *   GET  /exec?fn=ping
+ *   GET  /exec?fn=rows&callback=cb
+ *   GET  /exec?fn=img&id=<fileId>&w=800      (image by id)
+ *   GET  /exec?fn=img&u=<url>&w=800          (image by URL)
+ *   GET  /exec?id=<fileId>&w=800             (shorthand: image by id)
+ *   GET  /exec?fn=imgpage&id=<fileId>        (test page)
+ *   GET  /exec?fn=save&callback=cb&payload=<json>     (JSONP save for static hosting)
+ *   POST /exec  fn=save  payload=<json>               (POST save)
+ *   POST /exec  fn=upload  (multipart form-data)      (file upload)
+ *   POST /exec  fn=uploadB64  name, folderId?, dataUrl (base64 upload)
+ *   GET  /exec?fn=diag      (Drive API diagnostics)
+ *   GET  /exec?fn=imgdiag&id=<fileId>  (why a specific image id passes/fails)
  */
 
-var WEBAPP_VERSION = 'IMG-TEST-1';
+// ================= CONFIG =================
+var WEBAPP_VERSION = 'IMG-CORB-SAFE-2025-11-02';
 
-// ===== CONFIG =====
-var SPREADSHEET_ID = '14egNzmQZYcbeuXRRZIbvEMWOrGR4b_6Vy_rvnA0fEhY';
-var SHEET_NAME = 'Form Responses';
+// ---- YOUR SHEET ----
+var SPREADSHEET_ID = '14egNzmQZYcbeuXRRZIbvEMWOrGR4b_6Vy_rvnA0fEhY';   // << set yours if different
+var SHEET_NAME     = 'Form Responses';                                   // << sheet/tab name
 var KEY_COL_HEADER = 'Stable ID';
 
-// ==================
+// Optional default upload folder (leave '' to use My Drive root)
+var UPLOAD_FOLDER_ID = '';
+// ==========================================
 
 function doGet(e) {
   try {
     var p  = (e && e.parameter) ? e.parameter : {};
     var fn = p.fn || inferFn_(p);
 
-    // health
     if (fn === 'ping') {
-      return _jsonp(p.callback, { ok: true, version: WEBAPP_VERSION });
+      return _jsonp(p.callback, { ok:true, version: WEBAPP_VERSION });
     }
 
-    // data rows (domain-only JSONP)
     if (fn === 'rows') {
-      var rows = getSheetRows_();
-      return _jsonp(p.callback, { ok: true, data: rows });
+      var data = tryGetSheetRows_();
+      return _jsonp(p.callback, { ok:true, data: data });
     }
 
-    // image proxy (by Drive fileId or by URL)
     if (fn === 'img') {
       if (p.id) return serveImageById_(p.id, p.w);
       if (p.u)  return serveImageByUrl_(p.u, p.w);
       return _text('Missing "id" or "u" for img', 400);
     }
 
-    // simple test page that embeds the image
     if (fn === 'imgpage') {
       return serveImageTestPage_(p);
     }
 
-    // save (JSONP GET compatibility)
     if (fn === 'save') {
-      return handleSave_({ method: 'GET', params: p });
+      return handleSave_({ method:'GET', params:p });
     }
 
-    // debug: check what the script can see for a given id
+    if (fn === 'diag') {
+      return diagDriveApi_(p.id || '');
+    }
+
+    if (fn === 'imgdiag' && p.id) {
+      return imgDiag_(p.id);
+    }
+
     if (fn === 'info' && p.id) {
       return _json(debugFileInfo_(p.id));
     }
 
-    // allow /exec?id=<fileId> without fn
+    // Shorthand: /exec?id=<fileId>
     if (p.id) return serveImageById_(p.id, p.w);
 
     return _text(helpText_(), 200);
-
   } catch (err) {
     var cb = (e && e.parameter && e.parameter.callback) ? e.parameter.callback : null;
-    return _jsonp(cb, { ok: false, error: String(err) }, 500);
+    return _jsonp(cb, { ok:false, error:String(err) }, 500);
   }
 }
 
@@ -70,101 +81,172 @@ function doPost(e) {
   try {
     var fn = (e && e.parameter && e.parameter.fn) ? String(e.parameter.fn) : '';
 
-    // 1) Route uploads FIRST
     if (fn === 'upload')    return handleUpload_(e);    // multipart/form-data
-    if (fn === 'uploadB64') return handleUploadB64_(e); // base64 fallback
+    if (fn === 'uploadB64') return handleUploadB64_(e); // base64 data URL
 
-    // 2) Save (legacy + current)
-    if (fn === 'save') return handleSave_({ method: 'POST', post: e });
-    // Legacy fallback if no fn but a payload param was sent
-    if (e && e.parameter && typeof e.parameter.payload !== 'undefined') {
-      return handleSave_({ method: 'POST', post: e });
+    if (fn === 'save') return handleSave_({ method:'POST', post:e });
+
+    // Legacy POST save with payload only
+    if (!fn && e && (e.parameter && typeof e.parameter.payload !== 'undefined'
+        || e.postData && e.postData.contents)) {
+      return handleSave_({ method:'POST', post:e });
     }
 
-    return _json({ ok: false, error: 'Unknown fn or missing payload' }, 400);
+    return _json({ ok:false, error:'Unknown fn or missing payload' }, 400);
   } catch (err) {
-    return _json({ ok: false, error: String(err && err.stack || err) }, 500);
+    return _json({ ok:false, error:String(err && err.stack || err) }, 500);
   }
 }
 
-function getSheetRows_() {
-  if (!SPREADSHEET_ID) throw new Error('SPREADSHEET_ID not set');
+/* ================= Sheet I/O ================= */
+
+function tryGetSheetRows_() {
+  if (!SPREADSHEET_ID) return [];
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var sh = ss.getSheetByName(SHEET_NAME);
-  if (!sh) throw new Error('Sheet "' + SHEET_NAME + '" not found');
-
+  if (!sh) return [];
   var R = sh.getDataRange().getValues();
   if (!R || R.length < 2) return [];
   var H = R[0].map(function(h){ return String(h || '').trim(); });
   var out = [];
   for (var r = 1; r < R.length; r++) {
-    var row = R[r], obj = {};
+    var row = R[r], o = {};
     for (var c = 0; c < H.length; c++) {
-      obj[H[c]] = (row[c] == null ? '' : String(row[c]));
+      o[H[c]] = (row[c] == null ? '' : String(row[c]));
     }
-    out.push(obj);
+    out.push(o);
   }
   return out;
 }
 
-// Reuse your existing _jsonp if you already have it.
-// If not present, keep this:
-function _jsonp(callback, obj, status) {
-  var cb = callback || 'cb';
-  var body = cb + '(' + JSON.stringify(obj) + ');';
-  return ContentService.createTextOutput(body)
-    .setMimeType(ContentService.MimeType.JAVASCRIPT);
+function upsertRow_(data) {
+  if (!SPREADSHEET_ID) throw new Error('SPREADSHEET_ID not set');
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sh = ss.getSheetByName(SHEET_NAME);
+  if (!sh) throw new Error('Sheet "' + SHEET_NAME + '" not found');
+
+  var values = sh.getDataRange().getValues();
+  var headers = values.length ? values[0].map(function(h){ return String(h||'').trim(); }) : [];
+
+  var changedHeader = false;
+  Object.keys(data).forEach(function(k){
+    if (headers.indexOf(k) === -1) { headers.push(k); changedHeader = true; }
+  });
+  if (changedHeader) {
+    sh.getRange(1,1,1,headers.length).setValues([headers]);
+    if (values.length > 1) {
+      sh.getRange(2,1,values.length-1,headers.length)
+        .setValues(values.slice(1).map(function(row){
+          var r = row.slice(); while (r.length < headers.length) r.push(''); return r;
+        }));
+    }
+  }
+
+  var keyCol = headers.indexOf(KEY_COL_HEADER);
+  if (keyCol === -1) {
+    headers.push(KEY_COL_HEADER);
+    sh.getRange(1,1,1,headers.length).setValues([headers]);
+    keyCol = headers.length - 1;
+  }
+
+  var keyVal = String(data[KEY_COL_HEADER] || data[KEY_COL_HEADER+':'] || '').trim();
+  var lastRow = sh.getLastRow();
+  var targetRow = -1;
+
+  if (keyVal) {
+    var keyColA1 = keyCol + 1;
+    var colRange = sh.getRange(2, keyColA1, Math.max(0, lastRow - 1)).getValues();
+    for (var i = 0; i < colRange.length; i++) {
+      if (String(colRange[i][0]).trim() === keyVal) { targetRow = i + 2; break; }
+    }
+  }
+
+  var created = false;
+  if (targetRow === -1) {
+    keyVal = genStableId_();
+    data[KEY_COL_HEADER] = keyVal;
+    targetRow = lastRow + 1;
+    sh.insertRowAfter(lastRow || 1);
+    created = true;
+  }
+
+  var rowVals = sh.getRange(targetRow,1,1,headers.length).getValues()[0];
+  for (var h=0; h<headers.length; h++) {
+    var hdr = headers[h];
+    if (hdr in data) rowVals[h] = (data[hdr] == null ? '' : String(data[hdr]));
+  }
+  sh.getRange(targetRow,1,1,headers.length).setValues([rowVals]);
+  return { ok:true, created:created, row:targetRow, id:keyVal };
 }
 
+function genStableId_(){
+  var t=new Date(), pad=function(n){return n<10?'0'+n:''+n;};
+  return 'SID-'+t.getFullYear()+pad(t.getMonth()+1)+pad(t.getDate())+'-'
+       + pad(t.getHours())+pad(t.getMinutes())+pad(t.getSeconds())+'-'
+       + Math.floor(Math.random()*1e6);
+}
 
-// ===== Upload (multipart) =====
-/**
- * POST /exec  with multipart/form-data:
- * fields: fn=upload, folderId?=..., file=<binary>
- * Returns: {ok:true, id, link, name}
- */
+/* ================= Uploads ================= */
+
 function handleUpload_(e){
   var folderId = (e && e.parameter && e.parameter.folderId) ? String(e.parameter.folderId) : '';
   var folder;
-  try{
-    folder = folderId ? DriveApp.getFolderById(folderId) : (UPLOAD_FOLDER_ID ? DriveApp.getFolderById(UPLOAD_FOLDER_ID) : DriveApp.getRootFolder());
-  }catch(err){
-    folder = DriveApp.getRootFolder();
-  }
-  if (!e || !e.files || !e.files.file){
-    return _json({ ok:false, error:'No file field found (name="file").' }, 400);
-  }
-  var blob = e.files.file; // Blob
+  try { folder = folderId ? DriveApp.getFolderById(folderId) : (UPLOAD_FOLDER_ID ? DriveApp.getFolderById(UPLOAD_FOLDER_ID) : DriveApp.getRootFolder()); }
+  catch(_){ folder = DriveApp.getRootFolder(); }
+
+  if (!e || !e.files || !e.files.file) return _json({ ok:false, error:'No file field (name="file").' }, 400);
+
+  var blob = e.files.file;
   if (!blob) return _json({ ok:false, error:'Empty file' }, 400);
+
   var name = blob.getName() || ('upload-' + Date.now());
   var file = folder.createFile(blob.copyBlob().setName(name));
-  // Make viewable by link
-  try{ file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); }catch(e){}
-  var id = file.getId();
-  var link = 'https://drive.google.com/uc?id=' + id;
-  return _json({ ok:true, id:id, link:link, name:name }, 200);
+  try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(_){}
+  return _json({ ok:true, id:file.getId(), link:'https://drive.google.com/uc?id='+file.getId(), name:name });
 }
 
-// Map a string like "image/jpeg" to ContentService.MimeType
-function asCsMime_(ctype) {
+function handleUploadB64_(e){
+  var folderId = (e && e.parameter && e.parameter.folderId) ? String(e.parameter.folderId) : '';
+  var name     = (e && e.parameter && e.parameter.name) ? String(e.parameter.name) : ('upload-' + Date.now() + '.jpg');
+  var dataUrl  = (e && e.parameter && e.parameter.dataUrl) ? String(e.parameter.dataUrl) : '';
+  if (!dataUrl) return _json({ ok:false, error:'Missing dataUrl' }, 400);
+
+  var m = dataUrl.match(/^data:([^;]+);base64,(.*)$/);
+  if (!m) return _json({ ok:false, error:'Bad dataUrl' }, 400);
+  var mime = m[1], b64 = m[2];
+
+  var bytes = Utilities.base64Decode(b64);
+  var blob  = Utilities.newBlob(bytes, mime, name);
+
+  var folder;
+  try { folder = folderId ? DriveApp.getFolderById(folderId) : (UPLOAD_FOLDER_ID ? DriveApp.getFolderById(UPLOAD_FOLDER_ID) : DriveApp.getRootFolder()); }
+  catch(_){ folder = DriveApp.getRootFolder(); }
+
+  var file = folder.createFile(blob);
+  try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(_){}
+  return _json({ ok:true, id:file.getId(), link:'https://drive.google.com/uc?id='+file.getId(), name:name });
+}
+
+/* ================= Image Serving (CORB-safe) ================= */
+
+function asCsMime_(ctype){
   switch (String(ctype || '').toLowerCase()) {
     case 'image/png':  return ContentService.MimeType.PNG;
     case 'image/gif':  return ContentService.MimeType.GIF;
-    case 'image/webp': return ContentService.MimeType.PNG; // no WEBP enum; serve as PNG
+    case 'image/webp': return ContentService.MimeType.PNG; // fallback
     case 'image/jpeg':
     case 'image/jpg':
     default:           return ContentService.MimeType.JPEG;
   }
 }
 
-function serveImageById_(fileId, w) {
+// Return image using DriveApp first, then Drive v3 fallback (supports Shared Drives/resourceKey)
+function serveImageById_(fileId, w){
   try {
-    // Fast path: DriveApp (works when no resourceKey enforcement)
     var f = DriveApp.getFileById(fileId);
     var blob = f.getBlob();
-    return ContentService.createTextOutput(blob.getBytes()).setMimeType(asCsMime_(blob.getContentType()));
-  } catch (e) {
-    // Fallback: Drive API (handles resourceKey / Shared Drives)
+    return ContentService.createTextOutput(blob).setMimeType(asCsMime_(blob.getContentType()));
+  } catch (e1) {
     try {
       var meta  = Drive.Files.get(fileId, { supportsAllDrives: true });
       var url   = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) + '?alt=media';
@@ -175,59 +257,45 @@ function serveImageById_(fileId, w) {
         muteHttpExceptions: true,
         followRedirects: true
       });
-      var code  = resp.getResponseCode();
-      if (code < 200 || code >= 300) return _text('Image not found for id=' + fileId, 404);
-
-      var blob  = resp.getBlob();
-      var mime  = asCsMime_(meta && meta.mimeType ? meta.mimeType : blob.getContentType());
-      return ContentService.createTextOutput(blob).setMimeType(mime);
-    } catch (ee) {
-      Logger.log('serveImageById_ fallback failed for ' + fileId + ': ' + ee);
+      if (resp.getResponseCode() < 200 || resp.getResponseCode() >= 300) {
+        return _text('Image not found for id=' + fileId, 404);
+      }
+      var b2 = resp.getBlob();
+      var mime = asCsMime_(meta && meta.mimeType ? meta.mimeType : b2.getContentType());
+      return ContentService.createTextOutput(b2).setMimeType(mime);
+    } catch (e2) {
       return _text('Image not found for id=' + fileId, 404);
     }
   }
 }
 
-function serveImageByUrl_(url, w) {
+function serveImageByUrl_(url, w){
   try {
-    var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
-    var code = resp.getResponseCode();
-    if (code < 200 || code >= 300) return _text('Upstream fetch failed: ' + code, 502);
-
+    var resp = UrlFetchApp.fetch(url, { muteHttpExceptions:true, followRedirects:true });
+    if (resp.getResponseCode() < 200 || resp.getResponseCode() >= 300) return _text('Upstream fetch failed', 502);
     var blob = resp.getBlob();
-    return ContentService.createTextOutput(blob.getBytes()).setMimeType(asCsMime_(blob.getContentType()));
+    return ContentService.createTextOutput(blob).setMimeType(asCsMime_(blob.getContentType()));
   } catch (err) {
-    Logger.log('serveImageByUrl_ error: ' + (err && err.stack ? err.stack : err));
     return _text('Failed to fetch url', 502);
   }
 }
 
-
-function serveImageTestPage_(p) {
+function serveImageTestPage_(p){
   var base = ScriptApp.getService().getUrl();
-  var src = '';
-  if (p.id) {
-    src = base + '?id=' + encodeURIComponent(p.id) + (p.w ? '&w=' + encodeURIComponent(p.w) : '');
-  } else if (p.u) {
-    src = base + '?fn=img&u=' + encodeURIComponent(p.u) + (p.w ? '&w=' + encodeURIComponent(p.w) : '');
-  }
-  var html = ''
-    + '<!doctype html>'
-    + '<meta name="viewport" content="width=device-width,initial-scale=1">'
-    + '<title>Image test</title>'
-    + '<div style="font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; padding:16px;">'
+  var src = p.id ? (base + '?fn=img&id=' + encodeURIComponent(p.id) + (p.w ? '&w=' + encodeURIComponent(p.w) : ''))
+                 : (p.u ? (base + '?fn=img&u='  + encodeURIComponent(p.u)  + (p.w ? '&w=' + encodeURIComponent(p.w) : '')) : '');
+  var html = '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Image test</title>'
+    + '<div style="font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px;">'
     + '<h1>Image test</h1>'
-    + '<p>Below is the image served by ' + (p.id ? '<code>?id=</code>' : '<code>?fn=img&amp;u=</code>') + ':</p>'
     + (src ? '<img src="' + src + '" style="max-width:100%;height:auto;border:1px solid #ddd;padding:4px;border-radius:6px;">'
            : '<p><em>No id or u provided.</em></p>')
-    + '<hr><p>Version: ' + WEBAPP_VERSION + '</p>'
-    + '</div>';
+    + '<hr><p>Version: ' + WEBAPP_VERSION + '</p></div>';
   return ContentService.createTextOutput(html).setMimeType(ContentService.MimeType.HTML);
 }
 
-/* ---------- Save handlers (GET JSONP + POST) ---------- */
+/* ================= Saves ================= */
 
-function handleSave_(ctx) {
+function handleSave_(ctx){
   var method = ctx.method;
   var callback = (ctx.params && ctx.params.callback) ? ctx.params.callback : null;
 
@@ -236,277 +304,152 @@ function handleSave_(ctx) {
     payloadStr = (ctx.params && ctx.params.payload) ? ctx.params.payload : '';
   } else if (method === 'POST') {
     var e = ctx.post || {};
-    if (e.parameter && e.parameter.payload) {
-      payloadStr = e.parameter.payload;
-    } else {
-      payloadStr = (e.postData && e.postData.contents) ? e.postData.contents : '';
-    }
+    if (e.parameter && typeof e.parameter.payload !== 'undefined') payloadStr = e.parameter.payload;
+    else payloadStr = (e.postData && e.postData.contents) ? e.postData.contents : '';
   } else {
-    return _jsonp(callback, { ok: false, error: 'Unsupported method' }, 405);
+    return _jsonp(callback, { ok:false, error:'Unsupported method' }, 405);
   }
 
   var data;
-  try {
-    data = payloadStr ? JSON.parse(payloadStr) : null;
-  } catch (err) {
-    return _jsonp(callback, { ok: false, error: 'Invalid JSON payload' }, 400);
-  }
-  if (!data) {
-    return _jsonp(callback, { ok: false, error: 'Missing payload' }, 400);
-  }
+  try { data = payloadStr ? JSON.parse(payloadStr) : null; }
+  catch (err) { return _jsonp(callback, { ok:false, error:'Invalid JSON payload' }, 400); }
+  if (!data) return _jsonp(callback, { ok:false, error:'Missing payload' }, 400);
 
   try {
     var res = upsertRow_(data);
-    if (method === 'GET') return _jsonp(callback, { ok: true, result: res });
-    return _json({ ok: true, result: res });
+    if (method === 'GET') return _jsonp(callback, { ok:true, result: res });
+    return _json({ ok:true, result: res });
   } catch (err) {
-    Logger.log('handleSave_ error: ' + (err && err.stack ? err.stack : err));
-    if (method === 'GET') return _jsonp(callback, { ok: false, error: String(err) }, 500);
-    return _json({ ok: false, error: String(err) }, 500);
+    if (method === 'GET') return _jsonp(callback, { ok:false, error:String(err) }, 500);
+    return _json({ ok:false, error:String(err) }, 500);
   }
 }
 
-/* ---------- Sheet helpers ---------- */
+/* ================= Diagnostics ================= */
 
-// Try to fetch file bytes via Drive v3 (handles resourceKey + shared drives)
-function fetchDriveFileBytes_(fileId) {
-  var meta;
+function diagDriveApi_(testFileId){
+  var result = { ok:true, notes:[] };
+
+  // Advanced service present?
   try {
-    // Get metadata (includes resourceKey for “link-shared” files)
-    // Advanced Service: Drive.Files.get(fileId, { supportsAllDrives: true });
-    meta = Drive.Files.get(fileId, { supportsAllDrives: true });
+    var hasDrive = (typeof Drive !== 'undefined') && Drive && Drive.Files;
+    result.advanced_service_present = !!hasDrive;
+    if (!hasDrive) result.notes.push('Advanced Google Service "Drive" is NOT present (turn it ON in Services).');
   } catch (e) {
-    // If metadata is blocked, bail
-    throw new Error('Drive.Files.get failed: ' + e);
+    result.advanced_service_present = false;
+    result.notes.push('Advanced service check threw: ' + e);
   }
 
-  var resourceKey = meta && meta.resourceKey ? meta.resourceKey : null;
-
-  // Download bytes via REST with OAuth token
-  var url = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) + '?alt=media';
-  if (resourceKey) url += '&resourceKey=' + encodeURIComponent(resourceKey);
-
-  var resp = UrlFetchApp.fetch(url, {
-    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
-    muteHttpExceptions: true,
-    followRedirects: true
-  });
-
-  var code = resp.getResponseCode();
-  if (code < 200 || code >= 300) {
-    throw new Error('download alt=media HTTP ' + code);
+  // Drive v3 API enabled in GCP?
+  try {
+    var resp = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/about?fields=user,storageQuota', {
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+      muteHttpExceptions: true
+    });
+    result.v3_about_status = resp.getResponseCode();
+    result.v3_about_snippet = String(resp.getContentText()).slice(0, 200);
+    if (result.v3_about_status !== 200) {
+      result.notes.push('Drive v3 about returned HTTP ' + result.v3_about_status);
+    }
+  } catch (e) {
+    result.v3_about_error = String(e);
+    result.notes.push('Drive v3 about threw: ' + e);
   }
 
-  return resp.getContent(); // byte[]
-}
-
-
-/** Canonicalize a payload key to an existing sheet header.
- * Returns '' if no match is found (caller should skip that key).
- */
-function canonHeaderKey_(key, indexByName) {
-  var k = String(key || '').trim();
-  if (!k) return '';
-  // exact match
-  if (indexByName[k]) return k;
-
-  // try with/without trailing colon variants
-  var noColon = k.replace(/:\s*$/, '');
-  if (indexByName[noColon]) return noColon;
-  if (indexByName[noColon + ':']) return (noColon + ':');
-  if (indexByName[k + ':']) return (k + ':');
-
-  // no match in the current header map => skip this key
-  return '';
-}
-
-function upsertRow_(obj) {
-  if (!SPREADSHEET_ID) throw new Error('SPREADSHEET_ID not set');
-  if (!SHEET_NAME) throw new Error('SHEET_NAME not set');
-  if (!KEY_COL_HEADER) throw new Error('KEY_COL_HEADER not set');
-
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sh = ss.getSheetByName(SHEET_NAME);
-  if (!sh) throw new Error('Sheet "' + SHEET_NAME + '" not found');
-
-  var map = getHeaderMap_(sh);
-  var headers = map.headers;
-  var indexByName = map.indexByName;
-
-  var keyCol = indexByName[KEY_COL_HEADER];
-  if (!keyCol) throw new Error('Key column "' + KEY_COL_HEADER + '" not found');
-
-  var keyVal = obj[KEY_COL_HEADER];
-  if (keyVal == null || keyVal === '') {
-    throw new Error('Key not found in payload for "' + KEY_COL_HEADER + '"');
-  }
-
-  var lastRow = sh.getLastRow();
-  if (lastRow < 2) {
-    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
-  }
-
-  var keyRange = sh.getRange(2, keyCol, Math.max(sh.getLastRow() - 1, 0), 1).getValues();
-  var rowIndex = -1;
-  for (var i = 0; i < keyRange.length; i++) {
-    if (String(keyRange[i][0]) === String(keyVal)) {
-      rowIndex = i + 2;
-      break;
+  if (testFileId) {
+    try {
+      var meta = Drive.Files.get(testFileId, {supportsAllDrives:true});
+      result.drive_files_get_ok = true;
+      result.sample_file_name = meta && (meta.name || meta.title);
+    } catch (e) {
+      result.drive_files_get_ok = false;
+      result.drive_files_get_error = String(e);
     }
   }
-  if (rowIndex === -1) {
-    rowIndex = sh.getLastRow() + 1;
-  }
-
-  var mutatedHeaders = false;
-  for (var k in obj) {
-    if (obj.hasOwnProperty(k) && !indexByName[k]) {
-      headers.push(k);
-      indexByName[k] = headers.length; // 1-based
-      mutatedHeaders = true;
-    }
-  }
-  if (mutatedHeaders) {
-    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
-  }
-
-  var rowVals = new Array(headers.length);
-  for (var j = 0; j < headers.length; j++) rowVals[j] = '';
-  for (var kk in obj) {
-    if (!obj.hasOwnProperty(kk)) continue;
-    var col = indexByName[kk];
-    if (col) rowVals[col - 1] = obj[kk];
-  }
-  sh.getRange(rowIndex, 1, 1, headers.length).setValues([rowVals]);
-
-  return { row: rowIndex, key: keyVal, columns: headers.length };
+  return ContentService.createTextOutput(JSON.stringify(result, null, 2))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
-function getHeaderMap_(sh) {
-  var lastCol = Math.max(sh.getLastColumn(), 1);
-  var headerVals = sh.getRange(1, 1, 1, lastCol).getValues()[0];
-  var headers = [];
-  var indexByName = {};
-  for (var i = 0; i < headerVals.length; i++) {
-    var name = headerVals[i] ? String(headerVals[i]).trim() : '';
-    if (name) {
-      headers.push(name);
-      indexByName[name] = i + 1; // 1-based
-    } else {
-      break;
-    }
-  }
-  if (headers.length === 0) {
-    headers.push(KEY_COL_HEADER);
-    indexByName[KEY_COL_HEADER] = 1;
-  }
-  return { headers: headers, indexByName: indexByName };
-}
-
-/* ---------- Output helpers ---------- */
-
-function _json(obj, status) {
-  var payload = JSON.stringify(obj);
-  if (status && status !== 200) {
-    payload = JSON.stringify({ status: status, ok: obj && obj.ok, error: obj && obj.error, result: obj && obj.result });
-  }
-  return ContentService.createTextOutput(payload).setMimeType(ContentService.MimeType.JSON);
-}
-
-function _jsonp(callback, obj, status) {
-  if (callback) {
-    var body = callback + '(' + JSON.stringify(obj) + ');';
-    if (status && status !== 200) {
-      body = callback + '(' + JSON.stringify({ status: status, ok: obj && obj.ok, error: obj && obj.error, result: obj && obj.result }) + ');';
-    }
-    return ContentService.createTextOutput(body).setMimeType(ContentService.MimeType.JAVASCRIPT);
-  }
-  return _json(obj, status);
-}
-
-function _text(message, status) {
-  var msg = String(message);
-  if (status && status !== 200) {
-    msg = '[' + status + '] ' + msg;
-  }
-  return ContentService.createTextOutput(msg).setMimeType(ContentService.MimeType.TEXT);
-}
-
-function inferFn_(p) {
-  if (p && (p.id || p.u)) return 'img';
-  return null;
-}
-
-function helpText_() {
-  var base = ScriptApp.getService().getUrl();
-  var lines = [
-    'HFD Preplan Web App ' + WEBAPP_VERSION,
-    '',
-    'Image by fileId:',
-    base + '?id=<FILE_ID>&w=800',
-    '',
-    'Image via fn=img with fileId:',
-    base + '?fn=img&id=<FILE_ID>&w=800',
-    '',
-    'Image by URL:',
-    base + '?fn=img&u=<ENCODED_URL>&w=800',
-    '',
-    'Test page:',
-    base + '?fn=imgpage&id=<FILE_ID>&w=800',
-    '',
-    'Save (JSONP GET):',
-    base + '?fn=save&callback=cb&payload=<JSON>',
-    '',
-    'Save (POST form or raw JSON to /exec with fn=save)'
-  ];
-  return lines.join('\n');
-}
-
-
-/** Upload via base64 (fallback when e.files is unavailable) */
-function handleUploadB64_(e){
-  var p = (e && e.parameter) ? e.parameter : {};
-  var folderId = (p.folderId || '').trim();
-  var name = (p.name || ('upload-' + Date.now()));
-  var data = p.data || '';
-  if (!folderId) return _json({ ok:false, error:'Missing folderId' }, 400);
-  if (!data) return _json({ ok:false, error:'Missing data' }, 400);
-
-  // Accept data URLs like "data:image/jpeg;base64,...." or raw base64
-  var base64 = data;
-  var m = String(data).match(/^data:.*?;base64,(.*)$/);
-  if (m) base64 = m[1];
-
-  var bytes;
-  try{ bytes = Utilities.base64Decode(base64); }catch(err){ return _json({ ok:false, error:'Bad base64' }, 400); }
-  var blob = Utilities.newBlob(bytes, 'application/octet-stream', name);
-
-  var folder;
-  try { folder = DriveApp.getFolderById(folderId); } catch(err){ return _json({ ok:false, error:'Invalid folderId' }, 400); }
-  var file = folder.createFile(blob);
-  try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
-
-  var id = file.getId();
-  var link = 'https://drive.google.com/uc?id=' + id;
-  return _json({ ok:true, id:id, link:link, name:name }, 200);
-}
-
-
-// Helper
-function debugFileInfo_(id){
-  try{
+function imgDiag_(id){
+  var info = { id:id, used:'', ok:false, note:'' };
+  try {
     var f = DriveApp.getFileById(id);
+    var b = f.getBlob();
+    info.used = 'DriveApp';
+    info.ok = true;
+    info.mime = b.getContentType();
+    info.size = b.getBytes().length;
+    return ContentService.createTextOutput(JSON.stringify(info, null, 2))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (e1) {
+    info.used = 'Drive.Files + v3 media';
+    info.driveapp_error = String(e1);
+    try {
+      var meta  = Drive.Files.get(id, {supportsAllDrives:true});
+      var url   = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) + '?alt=media';
+      if (meta && meta.resourceKey) url += '&resourceKey=' + encodeURIComponent(meta.resourceKey);
+      var resp  = UrlFetchApp.fetch(url, {
+        headers:{ Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+        muteHttpExceptions:true,
+        followRedirects:true
+      });
+      info.http = resp.getResponseCode();
+      if (info.http >= 200 && info.http < 300) {
+        var b = resp.getBlob();
+        info.ok = true;
+        info.mime = b.getContentType();
+        info.size = b.getBytes().length;
+      } else {
+        info.ok = false;
+        info.note = resp.getContentText().slice(0,200);
+      }
+      return ContentService.createTextOutput(JSON.stringify(info, null, 2))
+        .setMimeType(ContentService.MimeType.JSON);
+    } catch(e2){
+      info.ok = false;
+      info.v3_error = String(e2);
+      return ContentService.createTextOutput(JSON.stringify(info, null, 2))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+}
+
+/* ================= Helpers ================= */
+
+function _json(obj){ return ContentService.createTextOutput(JSON.stringify(obj||{})).setMimeType(ContentService.MimeType.JSON); }
+function _jsonp(callback, obj){ var cb = callback || 'cb'; return ContentService.createTextOutput(cb+'('+JSON.stringify(obj)+');').setMimeType(ContentService.MimeType.JAVASCRIPT); }
+function _text(s, code){ return ContentService.createTextOutput(String(s == null ? '' : s)).setMimeType(ContentService.MimeType.TEXT); }
+
+function inferFn_(p){ if (!p) return ''; if (p.id && !p.fn) return 'img'; return ''; }
+
+function helpText_(){
+  return [
+    'HFD Preplan Web App ' + WEBAPP_VERSION,
+    'Try:',
+    '  ?fn=ping',
+    '  ?fn=rows&callback=cb',
+    '  ?fn=img&id=<fileId>',
+    '  ?fn=img&u=<url>',
+    '  ?id=<fileId>',
+    '  ?fn=imgpage&id=<fileId>',
+    '  ?fn=save&callback=cb&payload=<json>',
+    '  ?fn=diag',
+    '  ?fn=imgdiag&id=<fileId>'
+  ].join('\n');
+}
+
+function debugFileInfo_(fileId){
+  try {
+    var f = DriveApp.getFileById(fileId);
     return {
       ok: true,
-      id: id,
+      id: f.getId(),
       name: f.getName(),
       mimeType: f.getMimeType(),
-      trashed: (typeof f.isTrashed==='function')? f.isTrashed(): null
+      size: f.getSize(),
+      url: 'https://drive.google.com/file/d/' + f.getId() + '/view'
     };
-  }catch(e){
-    return { ok:false, id:id, error:String(e) };
+  } catch (e) {
+    return { ok:false, error:String(e) };
   }
 }
-
-
-
