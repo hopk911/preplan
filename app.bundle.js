@@ -2,6 +2,9 @@
    - Merges: drive-only thumbnail helper + main app logic
    - No prototype monkey-patching; no duplicate globals
 */
+console.log('[bundle] JSONP rows build is active');
+
+
 (function(){
   'use strict';
 
