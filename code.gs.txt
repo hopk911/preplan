@@ -8,10 +8,10 @@
  *   POST /exec with fn=save & payload=<json>   (POST)
  */
 
-var WEBAPP_VERSION = '2025-10-30';
+var WEBAPP_VERSION = 'IMG-TEST-1';
 
 // ===== CONFIG =====
-var SPREADSHEET_ID = '1B1JbGtXAl-ymNQ-vb4UBRwZZ36byfu3fva0XpstidNA';
+var SPREADSHEET_ID = '14egNzmQZYcbeuXRRZIbvEMWOrGR4b_6Vy_rvnA0fEhY';
 var SHEET_NAME = 'Form Responses';
 var KEY_COL_HEADER = 'Stable ID';
 
@@ -19,34 +19,48 @@ var KEY_COL_HEADER = 'Stable ID';
 
 function doGet(e) {
   try {
-    var p = (e && e.parameter) ? e.parameter : {};
+    var p  = (e && e.parameter) ? e.parameter : {};
     var fn = p.fn || inferFn_(p);
 
+    // health
     if (fn === 'ping') {
       return _jsonp(p.callback, { ok: true, version: WEBAPP_VERSION });
     }
 
+    // data rows (domain-only JSONP)
+    if (fn === 'rows') {
+      var rows = getSheetRows_();
+      return _jsonp(p.callback, { ok: true, data: rows });
+    }
+
+    // image proxy (by Drive fileId or by URL)
     if (fn === 'img') {
       if (p.id) return serveImageById_(p.id, p.w);
       if (p.u)  return serveImageByUrl_(p.u, p.w);
       return _text('Missing "id" or "u" for img', 400);
     }
 
+    // simple test page that embeds the image
     if (fn === 'imgpage') {
       return serveImageTestPage_(p);
     }
 
+    // save (JSONP GET compatibility)
     if (fn === 'save') {
       return handleSave_({ method: 'GET', params: p });
     }
 
-    // Allow direct /exec?id=... with no fn
+    // debug: check what the script can see for a given id
+    if (fn === 'info' && p.id) {
+      return _json(debugFileInfo_(p.id));
+    }
+
+    // allow /exec?id=<fileId> without fn
     if (p.id) return serveImageById_(p.id, p.w);
 
     return _text(helpText_(), 200);
 
   } catch (err) {
-    Logger.log('doGet error: ' + (err && err.stack ? err.stack : err));
     var cb = (e && e.parameter && e.parameter.callback) ? e.parameter.callback : null;
     return _jsonp(cb, { ok: false, error: String(err) }, 500);
   }
@@ -71,6 +85,35 @@ function doPost(e) {
   } catch (err) {
     return _json({ ok: false, error: String(err && err.stack || err) }, 500);
   }
+}
+
+function getSheetRows_() {
+  if (!SPREADSHEET_ID) throw new Error('SPREADSHEET_ID not set');
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sh = ss.getSheetByName(SHEET_NAME);
+  if (!sh) throw new Error('Sheet "' + SHEET_NAME + '" not found');
+
+  var R = sh.getDataRange().getValues();
+  if (!R || R.length < 2) return [];
+  var H = R[0].map(function(h){ return String(h || '').trim(); });
+  var out = [];
+  for (var r = 1; r < R.length; r++) {
+    var row = R[r], obj = {};
+    for (var c = 0; c < H.length; c++) {
+      obj[H[c]] = (row[c] == null ? '' : String(row[c]));
+    }
+    out.push(obj);
+  }
+  return out;
+}
+
+// Reuse your existing _jsonp if you already have it.
+// If not present, keep this:
+function _jsonp(callback, obj, status) {
+  var cb = callback || 'cb';
+  var body = cb + '(' + JSON.stringify(obj) + ');';
+  return ContentService.createTextOutput(body)
+    .setMimeType(ContentService.MimeType.JAVASCRIPT);
 }
 
 
@@ -102,21 +145,46 @@ function handleUpload_(e){
   return _json({ ok:true, id:id, link:link, name:name }, 200);
 }
 
-/* ---------- Image proxy ---------- */
+// Map a string like "image/jpeg" to ContentService.MimeType
+function asCsMime_(ctype) {
+  switch (String(ctype || '').toLowerCase()) {
+    case 'image/png':  return ContentService.MimeType.PNG;
+    case 'image/gif':  return ContentService.MimeType.GIF;
+    case 'image/webp': return ContentService.MimeType.PNG; // no WEBP enum; serve as PNG
+    case 'image/jpeg':
+    case 'image/jpg':
+    default:           return ContentService.MimeType.JPEG;
+  }
+}
 
 function serveImageById_(fileId, w) {
   try {
-    var file = DriveApp.getFileById(fileId);
-    var blob = file.getBlob();
-    // NOTE: ContentService in Apps Script can serve binary using createBinaryOutput on V8.
-    // If your deployment complains, switch to HtmlService + <img src="data:..."> pattern,
-    // but this is the simpler, standard approach for images.
-    var out = ContentService.createBinaryOutput(blob);
-    var ctype = blob.getContentType() || ContentService.MimeType.JPEG;
-    return out.setMimeType(ctype);
-  } catch (err) {
-    Logger.log('serveImageById_ error: ' + (err && err.stack ? err.stack : err));
-    return _text('Image not found for id=' + fileId, 404);
+    // Fast path: DriveApp (works when no resourceKey enforcement)
+    var f = DriveApp.getFileById(fileId);
+    var blob = f.getBlob();
+    return ContentService.createTextOutput(blob.getBytes()).setMimeType(asCsMime_(blob.getContentType()));
+  } catch (e) {
+    // Fallback: Drive API (handles resourceKey / Shared Drives)
+    try {
+      var meta  = Drive.Files.get(fileId, { supportsAllDrives: true });
+      var url   = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) + '?alt=media';
+      if (meta && meta.resourceKey) url += '&resourceKey=' + encodeURIComponent(meta.resourceKey);
+
+      var resp  = UrlFetchApp.fetch(url, {
+        headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+        muteHttpExceptions: true,
+        followRedirects: true
+      });
+      var code  = resp.getResponseCode();
+      if (code < 200 || code >= 300) return _text('Image not found for id=' + fileId, 404);
+
+      var blob  = resp.getBlob();
+      var mime  = asCsMime_(meta && meta.mimeType ? meta.mimeType : blob.getContentType());
+      return ContentService.createTextOutput(blob).setMimeType(mime);
+    } catch (ee) {
+      Logger.log('serveImageById_ fallback failed for ' + fileId + ': ' + ee);
+      return _text('Image not found for id=' + fileId, 404);
+    }
   }
 }
 
@@ -124,18 +192,16 @@ function serveImageByUrl_(url, w) {
   try {
     var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
     var code = resp.getResponseCode();
-    if (code < 200 || code >= 300) {
-      return _text('Upstream fetch failed: ' + code, 502);
-    }
+    if (code < 200 || code >= 300) return _text('Upstream fetch failed: ' + code, 502);
+
     var blob = resp.getBlob();
-    var out = ContentService.createBinaryOutput(blob);
-    var ctype = blob.getContentType() || ContentService.MimeType.JPEG;
-    return out.setMimeType(ctype);
+    return ContentService.createTextOutput(blob.getBytes()).setMimeType(asCsMime_(blob.getContentType()));
   } catch (err) {
     Logger.log('serveImageByUrl_ error: ' + (err && err.stack ? err.stack : err));
     return _text('Failed to fetch url', 502);
   }
 }
+
 
 function serveImageTestPage_(p) {
   var base = ScriptApp.getService().getUrl();
@@ -201,6 +267,38 @@ function handleSave_(ctx) {
 }
 
 /* ---------- Sheet helpers ---------- */
+
+// Try to fetch file bytes via Drive v3 (handles resourceKey + shared drives)
+function fetchDriveFileBytes_(fileId) {
+  var meta;
+  try {
+    // Get metadata (includes resourceKey for “link-shared” files)
+    // Advanced Service: Drive.Files.get(fileId, { supportsAllDrives: true });
+    meta = Drive.Files.get(fileId, { supportsAllDrives: true });
+  } catch (e) {
+    // If metadata is blocked, bail
+    throw new Error('Drive.Files.get failed: ' + e);
+  }
+
+  var resourceKey = meta && meta.resourceKey ? meta.resourceKey : null;
+
+  // Download bytes via REST with OAuth token
+  var url = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) + '?alt=media';
+  if (resourceKey) url += '&resourceKey=' + encodeURIComponent(resourceKey);
+
+  var resp = UrlFetchApp.fetch(url, {
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    muteHttpExceptions: true,
+    followRedirects: true
+  });
+
+  var code = resp.getResponseCode();
+  if (code < 200 || code >= 300) {
+    throw new Error('download alt=media HTTP ' + code);
+  }
+
+  return resp.getContent(); // byte[]
+}
 
 
 /** Canonicalize a payload key to an existing sheet header.
@@ -392,3 +490,23 @@ function handleUploadB64_(e){
   var link = 'https://drive.google.com/uc?id=' + id;
   return _json({ ok:true, id:id, link:link, name:name }, 200);
 }
+
+
+// Helper
+function debugFileInfo_(id){
+  try{
+    var f = DriveApp.getFileById(id);
+    return {
+      ok: true,
+      id: id,
+      name: f.getName(),
+      mimeType: f.getMimeType(),
+      trashed: (typeof f.isTrashed==='function')? f.isTrashed(): null
+    };
+  }catch(e){
+    return { ok:false, id:id, error:String(e) };
+  }
+}
+
+
+
