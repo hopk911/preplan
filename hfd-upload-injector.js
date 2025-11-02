@@ -142,7 +142,7 @@ function sectionForField(label){
       fd2.append('fn','uploadB64');
       fd2.append('folderId', folderId);
       fd2.append('name', file.name);
-      fd2.append('data', dataUrl);
+      fd2.append('dataUrl', dataUrl);
       const res2 = await fetch(window.WEBAPP_URL, { method: 'POST', body: fd2, credentials: 'omit' });
       const json2 = await res2.json();
       if (!res2.ok || !json2.ok) throw new Error(json2.error || ('HTTP ' + res2.status));
