@@ -29,15 +29,17 @@ console.log('[bundle] JSONP rows build is active');
   const id = extractDriveId(srcOrId);
   const driveThumb = id ? ('https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w' + w) : String(srcOrId);
   const webapp = (window.WEBAPP_URL||'').replace(/\/$/,'');
+  const good = !!(webapp && /^https:\/\/script\.google\.com\//.test(webapp) && webapp.length > 40);
+  const proxied = (good && id) ? (webapp + '?id=' + encodeURIComponent(id) + '&w=' + w) : '';
   const klass = cls ? (' ' + cls) : '';
-  if (webapp && id) {
-    const proxied = webapp + '?id=' + encodeURIComponent(id) + '&w=' + w;
-    // Use proxy FIRST, and if it fails, fall back to Drive thumbnail
-    return '<img src=\"' + proxied + '\" onerror=\"this.onerror=null;this.src=\'' + driveThumb + '\'\" class=\"thumb' + klass + '\" loading=\"lazy\" alt=\"photo\">';
+  if (proxied) {
+    return '<img src="' + proxied + '" onerror="this.onerror=null;this.src=\'' + driveThumb.replace(/\'/g, "\'") + '\'" class="thumb' + klass + '" loading="lazy" alt="photo">';
   }
-  return '<img src=\"' + driveThumb + '\" class=\"thumb' + klass + '\" loading=\"lazy\" alt=\"photo\">';
+  return '<img src="' + driveThumb + '" class="thumb' + klass + '" loading="lazy" alt="photo">';
 }
-function loadThumbsWithin(){ /* proxy-first mode: no-op */ }(){ /* no-op in drive-only mode */ }
+return '<img src="' + driveThumb + '" class="thumb' + klass + '" loading="lazy" alt="photo">';
+}}
+  function loadThumbsWithin(){ /* no-op in drive-only mode */ }
 
   // ---------- Sections & routing ----------
   const SECTION_CONFIG = [
