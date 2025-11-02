@@ -6,8 +6,7 @@
   <title>HFD Pre-Plan</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="icon" href="data:," />
- 
-  <script>
+<script>
     // Runtime config
     window.WEBAPP_URL = window.WEBAPP_URL || "https://script.google.com/macros/s/AKfycbw21onFylHT5cxgLf5sZFeivQKL8T80czFd-IJGSJF4hU-08bUM-7Ugje4fg4nMAZnR2A/exec";
     window.GOOGLE_SHEET_JSON_URL = window.GOOGLE_SHEET_JSON_URL || "https://docs.google.com/spreadsheets/d/e/2PACX-1vR96-ya-PlTPaXtAUuiSkxHEq6EAcCIYVSUyzISW3mDW4X8CqZ5Hfw-0t3aMV4gLjV5SkYcOaFaPql2/pub?output=csv";
@@ -20,7 +19,9 @@
       if (qp) { try { localStorage.setItem('WEBAPP_URL', qp); } catch(e){} }
       const stored = (function(){ try { return localStorage.getItem('WEBAPP_URL') || ''; } catch(e){ return ''; } })();
       const looksTruncated = (u)=>!u || u.includes('...') || u.length<40;
+      const looksWrongOrigin = (u)=>!(/^https:\/\/script\.google\.com\//.test(u) || /^http:\/\/localhost/.test(u));
       if (looksTruncated(window.WEBAPP_URL)) window.WEBAPP_URL = stored || window.WEBAPP_URL;
+      if (looksWrongOrigin(window.WEBAPP_URL) && stored) window.WEBAPP_URL = stored;
       if (looksTruncated(window.WEBAPP_URL)) {
         console.error('[config] WEBAPP_URL is missing/invalid. Set it via ?webapp=<url> or localStorage.WEBAPP_URL.');
       } 
