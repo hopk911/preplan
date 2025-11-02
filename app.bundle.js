@@ -38,7 +38,7 @@ console.log('[bundle] JSONP rows build is active');
   return '<img src="' + driveThumb + '" class="thumb' + klass + '" loading="lazy" alt="photo">';
 }
 return '<img src="' + driveThumb + '" class="thumb' + klass + '" loading="lazy" alt="photo">';
-}}
+}
   function loadThumbsWithin(){ /* no-op in drive-only mode */ }
 
   // ---------- Sections & routing ----------
