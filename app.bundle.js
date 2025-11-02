@@ -55,9 +55,14 @@ console.log('[bundle] JSONP rows build is active');
     { key:'hydrant',   label:'Closest Hydrant',  getter:r=>getField(r,['Closest Hydrant','Closest Hydrant:','Nearest Hydrant','Hydrant Location']) }
   ];
 
-  const HIDE_IN_MODAL = ['timestamp','time stamp','stable id','stableid','address','closest hydrant','knox box location'];
+  const BASE_HIDE_IN_MODAL = ['timestamp','time stamp','stable id','stableid','address','closest hydrant','knox box location'];
   const normalizeKey = k => String(k||'').toLowerCase().replace(/[:\s]+$/,'').replace(/[^a-z0-9]+/g,' ').trim();
-  const isHiddenInModal = k => HIDE_IN_MODAL.includes(normalizeKey(k));
+  const isHiddenInModal = k => {
+    const m = document.getElementById('recordModal');
+    const editing = !!(m && m.classList && m.classList.contains('editing'));
+    if (editing) return false;
+    return BASE_HIDE_IN_MODAL.includes(normalizeKey(k));
+  };
 
   const FIELD_PATTERNS = [
     [/^Remote Alarm Location:?$/i,'fire'],
