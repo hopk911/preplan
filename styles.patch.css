@@ -1,0 +1,18 @@
+/* === hfd CSS patch (2025-11-02) === */
+/* Ensure photos in the "Other" section are never hidden */
+.section[data-color="other"] .photos img,
+#recordModal .section[data-color="other"] img,
+#recordModal [id^="section-other"] img {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* If any kv rows are hidden via a generic .hidden class, show them while editing */
+#recordModal.editing .kv.hidden { 
+  display: grid !important;
+  grid-template-columns: 180px 1fr;
+}
+
+/* Defensive: make section header nav sticky padding tweaks if needed */
+#sectionNav { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
