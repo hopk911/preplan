@@ -59,8 +59,9 @@ function buildImgWithFallback(srcOrId, cls, size){
     { key:'business',  label:'Business Name',    getter:r=>getField(r,['Business Name','Business Name:','Business','Name','Company','Facility Name']) },
     { key:'address',   label:'Address',          getter:r=>getField(r,['Address','Address:','Site Address','Street Address','Location Address']) },
     { key:'knox',      label:'Knox Box Location',getter:r=>getField(r,['Knox Box Location','Knox Box Location:','Knox Location','Knox Box']) },
-    { key:'hydrant',   label:'Closest Hydrant',  getter:r=>getField(r,['Closest Hydrant','Closest Hydrant:','Nearest Hydrant','Hydrant Location']) }
-  ];
+    { key:'hydrant',   label:'Closest Hydrant',  getter:r=>getField(r,['Closest Hydrant','Closest Hydrant:','Nearest Hydrant','Hydrant Location']) },
+    { key:'fdc',       label:'FDC',              getter:r=>getField(r,['FDC','FDC:','FDC Location','FDC Location:','Fire Department Connection','Fire Department Connection:']) }
+   ];
 
   const BASE_HIDE_IN_MODAL = ['timestamp', 'time stamp', 'stable id', 'stableid'];
   const normalizeKey = k => String(k||'').toLowerCase().replace(/[:\s]+$/,'').replace(/[^a-z0-9]+/g,' ').trim();
