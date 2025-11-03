@@ -1,3 +1,5 @@
+
+console.log('[bundle] hardened build 2025-11-03T02:42:40.703876Z');
 /* HFD Pre-Plan — single-file bundle
    - Merges: drive-only thumbnail helper + main app logic
    - No prototype monkey-patching; no duplicate globals
@@ -60,8 +62,8 @@ const FIELD_ORDER = {
   ],
 
   bldg: [
-    'Occupancy:', 'Occupancy Notes:','Construction Type:', 
-    'Construction Type Notes:', 'Number of Stories:',
+    'Number of Stories:', 'Occupancy:', 'Occupancy Notes:',
+    'Construction Type:', 'Construction Type Notes:',
     'Roof Type:', 'Basement:'
   ],
   fire: [
@@ -94,10 +96,7 @@ const FIELD_ORDER = {
     'Combustibles Location:', 'Flammables Location:', 'MSDS Location:', 'Hazmat Notes:'
   ],
   other: [
-    'Business Name:', 'Address:', 'Knox Box Location:', 'Closest Hydrant:', 'Contact Name (1):', 'Contact Number (1):', 'Contact Name (2):', 'Contact Number (2):'
-  ],
-  apparatus: [
-    'Ladder:',	'Engine:',	'Tanker:',	'Rescue:',	'Other Apparatus:'
+    'Address:', 'Knox Box Location:', 'Closest Hydrant:'
   ]
 };
 function _normKeyLabel(s){ return String(s||'').toLowerCase().replace(/:\s*$/,'').trim(); }
