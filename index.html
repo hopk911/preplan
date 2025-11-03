@@ -2,177 +2,276 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>HFD Pre-Plan</title>
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="styles.patch.css" />
-  <link rel="stylesheet" href="styles.photo-padding.css" />
-
-  <link rel="icon" href="data:," />
-<script>
-    // Runtime config
-    window.WEBAPP_URL = window.WEBAPP_URL || "https://script.google.com/macros/s/AKfycbw21onFylHT5cxgLf5sZFeivQKL8T80czFd-IJGSJF4hU-08bUM-7Ugje4fg4nMAZnR2A/exec";
-    window.GOOGLE_SHEET_JSON_URL = window.GOOGLE_SHEET_JSON_URL || "";
-    window.EDIT_SECRET = window.EDIT_SECRET || "changeme";
-    
-    // --- robust WEBAPP_URL resolution ---
-    (function(){
-      const qs = new URLSearchParams(location.search);
-      const qp = qs.get('webapp');
-      if (qp) { try { localStorage.setItem('WEBAPP_URL', qp); } catch(e){} }
-      const stored = (function(){ try { return localStorage.getItem('WEBAPP_URL') || ''; } catch(e){ return ''; } })();
-      const looksTruncated = (u)=>!u || u.includes('...') || u.length<40;
-      const looksWrongOrigin = (u)=>!(/^https:\/\/script\.google\.com\//.test(u) || /^http:\/\/localhost/.test(u));
-      if (looksTruncated(window.WEBAPP_URL)) window.WEBAPP_URL = stored || window.WEBAPP_URL;
-      if (looksWrongOrigin(window.WEBAPP_URL) && stored) window.WEBAPP_URL = stored;
-      if (looksTruncated(window.WEBAPP_URL)) {
-        console.error('[config] WEBAPP_URL is missing/invalid. Set it via ?webapp=<url> or localStorage.WEBAPP_URL.');
-      } 
-      
-    })();
-
-    window.__BUILD__ = "popup-edit-2025-10-30T21:03:17";
-  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    /* Hide any stray main-screen Edit button */
-    #btnEdit{ display:none !important; }
-    /* Visual hint for locked fields */
-    .modal .kv.locked .v{ pointer-events:none; opacity:.8; }
-    .modal .kv.locked .k::after{ content:" (locked)"; font-weight:400; opacity:.7; }
+    body {font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin:0; background:#f7f7f9; color:#111;}
+    header {position:sticky; top:0; background:#fff; z-index:5; border-bottom:1px solid #e6e6e8;}
+    .wrap {max-width:1100px; margin:0 auto; padding:16px;}
+    .toolbar {display:flex; gap:12px; align-items:center; justify-content:space-between;}
+    .btn {appearance:none; border:1px solid #d0d0d4; background:#fff; padding:8px 12px; border-radius:10px; cursor:pointer}
+    .btn.primary {background:#0b5cff; color:#fff; border-color:#0b5cff}
+    .btn.ghost {background:transparent}
+    table {width:100%; border-collapse:collapse; background:#fff; border:1px solid #e6e6e8; border-radius:12px; overflow:hidden;}
+    th, td {padding:10px 12px; border-bottom:1px solid #f0f0f2; text-align:left; font-size:14px;}
+    th {background:#fafafc; position:sticky; top:64px; z-index:1;}
+    tr:hover {background:#fafbff;}
+    /* Modal */
+    .modal-backdrop {position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; align-items:center; justify-content:center; z-index:1000;}
+    .modal {max-width:980px; width:calc(100vw - 32px); max-height:calc(100vh - 32px); overflow:auto; background:#fff; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,.25);}
+    .modal header {position:sticky; top:0; border-bottom:1px solid #eee;}
+    .modal .content {padding:16px;}
+    .grid {display:grid; gap:12px; grid-template-columns:repeat(2, minmax(0, 1fr));}
+    @media (max-width:900px){ .grid{grid-template-columns:1fr;} }
+    .field {display:flex; flex-direction:column; gap:6px;}
+    .field label {font-size:12px; color:#555;}
+    .field input, .field textarea, .field select {border:1px solid #d0d0d4; border-radius:10px; padding:8px 10px; font-size:14px; background:#fff;}
+    .muted {color:#777; font-size:12px;}
+    .row-actions {display:flex; gap:8px; align-items:center;}
+    .section-title {margin-top:12px; font-weight:600; border-top:1px dashed #e6e6e8; padding-top:12px;}
+    .hidden {display:none !important;}
   </style>
 </head>
 <body>
-  <header class="app-header">
-    <div class="brand">HFD Pre-Plan</div>
-    <div class="actions">
-      <button id="btnAdd" class="btn">Add New</button>
-      <!-- Main-screen Edit intentionally removed -->
+  <header>
+    <div class="wrap toolbar">
+      <div><strong>HFD Pre-Plan</strong></div>
+      <div class="row-actions">
+        <button id="btnAddNew" class="btn primary">Add New</button>
+      </div>
     </div>
   </header>
 
-  <div class="toolbar">
-    <input id="searchInput" class="search" placeholder="Search by name, address, keywords…" />
+  <main class="wrap" style="padding-top:16px;">
+    <div id="tableWrap">
+      <table id="dataTable" aria-label="Pre-plan table">
+        <thead id="thead"></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- Modal -->
+  <div id="popup" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="popupTitle">
+    <div class="modal">
+      <header>
+        <div class="wrap toolbar" style="padding:12px 16px;">
+          <div id="popupTitle"><strong>Record</strong></div>
+          <div class="row-actions">
+            <button id="btnEdit" class="btn">Edit</button>
+            <button id="btnSave" class="btn primary">Save</button>
+            <button id="btnClose" class="btn ghost">Close</button>
+          </div>
+        </div>
+      </header>
+      <div class="content">
+        <form id="editForm">
+          <div id="formGrid" class="grid"></div>
+
+          <div id="photoUploads" class="section-title">
+            Photo Uploads
+            <div class="muted">These write the Drive link back to their matching columns automatically.</div>
+            <div id="photoGrid" class="grid" style="margin-top:8px;"></div>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 
-  <section class="card">
-    <table id="dataTable">
-      <thead id="tableHead"></thead>
-      <tbody id="tableBody"></tbody>
-    </table>
-    <div class="pager">
-      <button id="prevPage" class="btn secondary">Prev</button>
-      <span id="pageInfo" class="pageinfo"></span>
-      <button id="nextPage" class="btn secondary">Next</button>
-    </div>
-  </section>
-
-  <dialog id="recordModal" class="modal" role="dialog" aria-modal="true">
-    <div class="modal-head">
-      <div id="modalThumbWrap" class="modal-thumb"></div>
-      <h3 id="modalTitle">Record</h3>
-      <button id="btnModalEdit" class="btn">Edit</button>
-      <button id="btnCloseModal" class="btn secondary">Close</button>
-    </div>
-    <div id="sectionNav" class="section-nav"></div>
-    <div id="modalContent" class="modal-content"></div>
-  </dialog>
-  <div id="modalBackdrop" class="modal-backdrop" hidden></div>
-
-  <!-- Shim to neutralize any old bundles that still reference main-screen btnEdit -->
+  <!-- Configure BEFORE loading app.bundle.js -->
   <script>
-    if (typeof window.btnEdit === 'undefined') { 
-      window.btnEdit = { addEventListener(){}, set disabled(_){}, get disabled(){ return false; } }; 
-    }
+    // REQUIRED: point this at your deployed Web App ("/exec")
+    window.WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw21onFylHT5cxgLf5sZFeivQKL8T80czFd-IJGSJF4hU-08bUM-7Ugje4fg4nMAZnR2A/exec";
+
+    // OPTIONAL: if you want to override the embedded map in the bundle, uncomment and edit:
+    /*
+    window.PHOTO_UPLOAD_FOLDERS = {
+      "Alarm Photo:": "FOLDER_ID",
+      "Roof Access Photo:": "FOLDER_ID"
+    };
+    */
   </script>
+  <script src="app.bundle.js"></script>
+  <script>
+    (function () {
+      const HIDE_FIELDS = new Set(["Timestamp", "Stable ID"]); // hide from UI, still preserved in payload if present
+      const table = document.getElementById('dataTable');
+      const thead = document.getElementById('thead');
+      const tbody = document.getElementById('tbody');
 
-  <!-- Cache-busted bundle and popup editor -->
-<script src="app.bundle.js"></script>
-<script src="popup-edit.js"></script>
+      const popup = document.getElementById('popup');
+      const btnClose = document.getElementById('btnClose');
+      const btnEdit = document.getElementById('btnEdit');
+      const btnSave = document.getElementById('btnSave');
+      const form = document.getElementById('editForm');
+      const formGrid = document.getElementById('formGrid');
+      const photoGrid = document.getElementById('photoGrid');
+      const btnAddNew = document.getElementById('btnAddNew');
 
-<!-- Tiny hotfix: auto-enter editing for brand-new draft so empty fields are visible -->
-<script>
-(function(){
-  function setup(){
-    
-    try{
-      var m=document.getElementById('recordModal');
-      if(m){ if(typeof m.close==='function') m.close(); m.removeAttribute('open'); }
-    }catch(_){}
-var modal = document.getElementById('recordModal');
-    if(!modal) return;
-    var obs = new MutationObserver(function(muts){
-      if (modal.hasAttribute('open') && (window._isNewDraft === true)) {
-        // Defer to allow modal content to render
-        requestAnimationFrame(function(){
-          var btn = document.getElementById('btnModalEdit');
-          if (btn && !modal.classList.contains('editing')) {
-            try { btn.click(); } catch(e){ /* noop */ }
-          }
+      let headers = [];
+      let rows = [];
+      let current = null;
+      let editMode = false;
+
+      // Utility: detect photo columns (end with "Photo:")
+      const isPhotoHeader = (h) => /photo:\s*$/i.test(h);
+
+      function openModal() { popup.style.display = 'flex'; }
+      function closeModal() { popup.style.display = 'none'; editMode = false; setEditMode(false); }
+      btnClose.addEventListener('click', () => closeModal());
+
+      function setEditMode(on) {
+        editMode = on;
+        form.querySelectorAll('[data-field]').forEach(el => {
+          el.disabled = !on;
+          // Visual cue for editability
+          el.style.background = on ? '#fff' : '#f8f8fa';
+        });
+        btnEdit.classList.toggle('hidden', on);
+        btnSave.classList.toggle('hidden', !on);
+      }
+      btnEdit.addEventListener('click', () => setEditMode(true));
+
+      // Build table header
+      function buildTableHeader(cols) {
+        const tr = document.createElement('tr');
+        // Show first 6 non-photo columns for the table view
+        let shown = 0;
+        cols.forEach(h => {
+          if (isPhotoHeader(h)) return;
+          if (shown >= 6) return;
+          const th = document.createElement('th');
+          th.textContent = h;
+          tr.appendChild(th);
+          shown++;
+        });
+        thead.innerHTML = '';
+        thead.appendChild(tr);
+      }
+
+      // Build table body
+      function buildTableBody(cols, data) {
+        tbody.innerHTML = '';
+        data.forEach((row, idx) => {
+          const tr = document.createElement('tr');
+          tr.tabIndex = 0;
+          tr.addEventListener('click', () => openRecord(idx));
+          let shown = 0;
+          cols.forEach(h => {
+            if (isPhotoHeader(h)) return;
+            if (shown >= 6) return;
+            const td = document.createElement('td');
+            td.textContent = row[h] ?? '';
+            tr.appendChild(td);
+            shown++;
+          });
+          tbody.appendChild(tr);
         });
       }
-    });
-    obs.observe(modal, { attributes: true, attributeFilter: ['open'] });
-  }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', setup);
-  } else {
-    setup();
-  }
-})();
-</script>
 
-<script src="hfd-upload-injector.js"></script>
-<script>
-/* Remove any accidental stray '/1' text or elements (enhanced stray /1 scrub) */
-(function(){
-  try{
-    const scan = ()=>{
-      document.querySelectorAll('body, body *').forEach(n=>{
-        if(n.childNodes) {
-          [...n.childNodes].forEach(c=>{
-            if((c.nodeType===3 && c.textContent && c.textContent.trim()==='/1') || (c.nodeType===1 && c.childNodes.length===1 && c.textContent && c.textContent.trim()==='/1')){
-              c.parentNode.removeChild(c);
+      // Build form fields dynamically from headers
+      function buildForm(record) {
+        formGrid.innerHTML = '';
+        photoGrid.innerHTML = '';
+
+        headers.forEach(h => {
+          const value = record?.[h] ?? '';
+          if (isPhotoHeader(h)) {
+            // Hide photo URL fields from manual editing; show upload controls instead
+            const wrap = document.createElement('div'); wrap.className = 'field';
+            const lbl = document.createElement('label'); lbl.textContent = h + ' (Upload)';
+            const file = document.createElement('input'); file.type = 'file'; file.accept = 'image/*';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn';
+            btn.setAttribute('data-upload-field', h);
+            const fileId = 'file_' + h.replace(/\W+/g, '_');
+            file.id = fileId;
+            btn.setAttribute('data-upload-input', '#' + fileId);
+            btn.textContent = 'Upload';
+            wrap.append(lbl, file, btn);
+            photoGrid.appendChild(wrap);
+            return;
+          }
+
+          // Normal editable field
+          const hide = HIDE_FIELDS.has(h);
+          const wrap = document.createElement('div'); wrap.className = 'field';
+          const lbl = document.createElement('label'); lbl.textContent = h;
+          const inp = document.createElement('input');
+          inp.value = value ?? '';
+          inp.setAttribute('data-field', h);  // IMPORTANT: exact header for saveRow payload
+          if (hide) wrap.classList.add('hidden');
+          wrap.append(lbl, inp);
+          formGrid.appendChild(wrap);
+        });
+
+        // Wire uploads
+        HFD.dom.bindUploads(document);
+      }
+
+      async function openRecord(idx) {
+        current = {...rows[idx]}; // shallow copy
+        document.getElementById('popupTitle').textContent = current['Business Name:'] || 'Record';
+        buildForm(current);
+        setEditMode(false);
+        openModal();
+      }
+
+      btnSave.addEventListener('click', async (e) => {
+        e.preventDefault();
+        // Collect current payload from form (exact header keys)
+        const payload = HFD.dom.collectFormPayload(form);
+
+        // Preserve any hidden system fields from the existing record
+        if (current) {
+          for (const key of Object.keys(current)) {
+            if (!(key in payload) && (HIDE_FIELDS.has(key) || isPhotoHeader(key))) {
+              payload[key] = current[key];
             }
-          });
+          }
+        }
+
+        try {
+          await HFD.api.saveRow(payload);
+          // After save, reload page so table reflects changes
+          location.reload();
+        } catch (ex) {
+          alert('Save failed: ' + ex.message);
+          console.error(ex);
         }
       });
-    };
-    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', scan);
-    else scan();
-  }catch(e){}
-})();
-</script>
 
-<script>
-// Force table refresh if a new draft was opened and then closed without saving
-(function(){
-  var modal = document.getElementById('recordModal');
-  var search = document.getElementById('searchInput');
-  if (!modal || !search) return;
+      btnAddNew.addEventListener('click', () => {
+        current = null;
+        document.getElementById('popupTitle').textContent = 'New Record';
+        buildForm({});
+        setEditMode(true);
+        openModal();
+      });
 
-  function refreshTableViaSearch(){
-    try {
-      // Toggle a space to trigger the debounced onSearch in the bundle
-      var v = search.value || '';
-      search.value = v + ' ';
-      search.dispatchEvent(new Event('input', {bubbles:true}));
-      setTimeout(function(){
-        search.value = v.trim();
-        search.dispatchEvent(new Event('input', {bubbles:true}));
-      }, 10);
-    } catch(e){ /* no-op */ }
-  }
-
-  modal.addEventListener('close', function(){
-    try {
-      if (window._isNewDraft === true) {
-        window._isNewDraft = false;
-        refreshTableViaSearch();
+      async function init() {
+        try {
+          const data = await HFD.api.getRows();
+          // Expect either an array of objects or {rows:[...]} — normalize:
+          rows = Array.isArray(data) ? data : (data.rows || []);
+          if (!rows.length) {
+            thead.innerHTML = '';
+            tbody.innerHTML = '';
+            return;
+          }
+          headers = Object.keys(rows[0] || {});
+          // Ensure we keep every header we might save, even if not shown in the table
+          buildTableHeader(headers);
+          buildTableBody(headers, rows);
+        } catch (ex) {
+          console.error('Failed to load rows', ex);
+          alert('Failed to load table data.');
+        }
       }
-    } catch(_) {}
-  });
-})();
-</script>
 
+      init();
+    })();
+  </script>
 </body>
 </html>
