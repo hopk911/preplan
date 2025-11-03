@@ -32,7 +32,9 @@
   function appendPreviews(header, links){
     try{
       const secId = sectionForField(header);
-      const secEl = document.getElementById('section-' + secId);
+      // Skip photo previews in 'Other' section
+      if (secId === 'other') return;
+const secEl = document.getElementById('section-' + secId);
       if (!secEl) return;
       let grid = secEl.querySelector('.thumb-grid');
       if (!grid){
