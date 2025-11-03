@@ -190,7 +190,6 @@ function buildImgWithFallback(srcOrId, cls, size){
     for(const c of candidates){ return {url:c.url, header:c.header}; }
     return {url:'', header:''};
   }
-  function firstPhotoWithSection(rec){ const {url,header}=resolveFirstPhoto(rec); const sec=header?sectionForField(header):'other'; return {url,sectionId:sec}; }
 
   // ---------- DOM refs ----------
   const $ = (id)=>document.getElementById(id);
