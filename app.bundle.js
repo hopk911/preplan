@@ -376,3 +376,4 @@ function findStableKey(headersArr){ const CANON='Stable ID'; const hit=(headersA
 function generateStableId(){ const t=new Date(), pad=n=>String(n).padStart(2,'0'); const stamp=`${t.getFullYear()}${pad(t.getMonth()+1)}${pad(t.getDate())}-${pad(t.getHours())}${pad(t.getMinutes())}${pad(t.getSeconds())}`; const rnd=Math.random().toString(36).slice(2,6).toUpperCase(); return `PP-${stamp}-${rnd}`; }
 function discardDraftIfNeeded(){ try{ const rec=rows[selectedIndex]; if(rec && rec.__isNew && !rec.__saved){ rows.splice(selectedIndex,1); selectedIndex=-1; renderTable && renderTable(); } }catch(e){ console.warn('[addNew] discardDraftIfNeeded',e); } }
 })(); 
+ 
