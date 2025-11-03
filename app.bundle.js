@@ -56,8 +56,8 @@ function buildImgWithFallback(srcOrId, cls, size){
 // ---- Optional per-section field order (top-to-bottom) ----
 const FIELD_ORDER = {
   bldg: [
-    'Number of Stories:', 'Occupancy:', 'Occupancy Notes:',
-    'Construction Type:', 'Construction Type Notes:',
+    'Occupancy:', 'Occupancy Notes:','Construction Type:', 
+    'Construction Type Notes:', 'Number of Stories:',
     'Roof Type:', 'Basement:'
   ],
   fire: [
