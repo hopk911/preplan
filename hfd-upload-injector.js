@@ -1,13 +1,17 @@
-// hfd-upload-injector.js (JSON dataUrl upload – minimal patch + immediate sheet write)
-// Based on your original injector; only the upload path changed to always send {fn:"upload", dataUrl, filename, field}
-// and we immediately persist the Drive link(s) to the Sheet via fn=savefield after a successful upload.
-// Place AFTER popup-edit.js. Requires window.WEBAPP_URL to point at your Apps Script Web App.
+// hfd-upload-injector.js
+// Robust, standalone injector that adds per-section Upload buttons and
+// ensures photo links are merged into the save payload.
+//
+// Include this file AFTER your existing popup-edit.js in index.html.
+//
+// <script src="popup-edit.js"></script>
+// <script src="hfd-upload-injector.js"></script>
 
 (function(){
   if (window.__HFD_UPLOAD_INJECTOR__) return;
   window.__HFD_UPLOAD_INJECTOR__ = true;
 
-  // ===== CONFIG: Drive folders by sheet header (headers include trailing colon) =====
+  // ===== CONFIG: Your Drive folders by sheet header (NO trailing colon) =====
   const PHOTO_UPLOAD_FOLDERS = {
     'Photo:':                    '1a-g1z9wQmo5wSr8oIidoLg2wLt4BTwxO',
     'Roof Access Photo:':        '1tlRVFlcBoWSG7jhs9uScwO93yE2qLccw',
@@ -28,8 +32,9 @@
   function appendPreviews(header, links){
     try{
       const secId = sectionForField(header);
-      if (secId === 'other') return; // skip “Other” section
-      const secEl = document.getElementById('section-' + secId);
+      // Skip photo previews in 'Other' section
+      if (secId === 'other') return;
+const secEl = document.getElementById('section-' + secId);
       if (!secEl) return;
       let grid = secEl.querySelector('.thumb-grid');
       if (!grid){
@@ -43,6 +48,7 @@
           if (typeof window.buildImgWithFallback === 'function'){
             html = window.buildImgWithFallback(u, '', 300);
           } else {
+            // Drive thumb as simple fallback
             const id = (String(u).match(/[?&]id=([\w-]{10,})/)||String(u).match(/\/d\/([\w-]{10,})/))?.[1] || '';
             const url = id ? ('https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w300') : String(u);
             html = '<img src="'+url+'" class="thumb" loading="lazy" alt="photo">';
@@ -58,18 +64,23 @@
     }catch(e){}
   }
 
-  function sectionForField(label){
-    const L = String(label||'').toLowerCase();
-    if (/(^|\b)(elevators?|elevator (bank|key|room)|lift|elev\b)/.test(L)) return 'elevators';
-    if (/^(alarm|pull|fdc|standpipe|riser|sprinkler|fire pump)/.test(L)) return 'fire';
-    if (/(water|hydrant|cistern|sprinkler)/.test(L)) return 'water';
-    if ((/electric|electrical|panel|breaker|generator/).test(L)) return 'electric';
-    if (/(gas|propane)/.test(L)) return 'gas';
-    if (/(hazmat|chemical|combustible|flammable|tank)/.test(L)) return 'hazmat';
-    return 'other';
-  }
 
-  // Keep photos in save payload
+function sectionForField(label){
+  // Heuristics mapping headers -> section ids used in your UI
+  const L = String(label||'').toLowerCase();
+
+  // NEW: route any elevator-related header to the Elevators section
+  if (/(^|\b)(elevators?|elevator (bank|key|room)|lift|elev\b)/.test(L)) return 'elevators';
+
+  if (/^(alarm|pull|fdc|standpipe|riser|sprinkler|fire pump)/.test(L)) return 'fire';
+  if (/(water|hydrant|cistern|sprinkler)/.test(L)) return 'water';
+  if (/(electric|electrical|panel|breaker|generator)/.test(L)) return 'electric';
+  if (/(gas|propane)/.test(L)) return 'gas';
+  if (/(hazmat|chemical|combustible|flammable|tank)/.test(L)) return 'hazmat';
+  return 'other';
+}
+
+  // Merge photo fields into save payload
   function mergePhotoFieldsIntoPayload(payload) {
     try {
       const rec = (window && window._currentRecord) ? window._currentRecord : {};
@@ -84,6 +95,7 @@
     return payload;
   }
 
+  // Patch collectFromPopup / saveEdits defensively
   (function patchSavers(){
     try {
       const oldCollect = window.collectFromPopup;
@@ -98,57 +110,45 @@
       const oldSave = window.saveEdits;
       if (typeof oldSave === 'function') {
         window.saveEdits = async function(){
+          // Ensure _currentRecord already contains latest photo links; oldSave will use collectFromPopup
           return await oldSave.apply(this, arguments);
         };
       }
     } catch (e) {}
   })();
 
-  // === Upload: ALWAYS send dataUrl via form-encoded POST (no preflight) ===
-  async function uploadOneFileToDrive(file, fieldHeader){
+  async function uploadOneFileToDrive(file, folderId){
     if (!window.WEBAPP_URL) throw new Error('WEBAPP_URL is not set');
-
-    // read the file as a data URL (iOS/Safari-safe)
-    const dataUrl = await new Promise((resolve, reject) => {
-      const fr = new FileReader();
-      fr.onerror = () => reject(new Error('reader failed'));
-      fr.onload  = () => resolve(fr.result);
-      fr.readAsDataURL(file);
-    });
-
-    // send as a simple form post (no headers) to avoid CORS preflight
-    const form = new URLSearchParams();
-    form.set('fn', 'upload');
-    form.set('field', fieldHeader);     // exact sheet header, e.g., "Alarm Photo:"
-    form.set('filename', file.name || '');
-    form.set('dataUrl', dataUrl);       // "data:image/jpeg;base64,...."
-
-    const res = await fetch(window.WEBAPP_URL, { method: 'POST', body: form });
-    let json;
-    try { json = await res.json(); } catch (_) { throw new Error('Failed to fetch'); }
-    if (!res.ok || !json || json.ok === false) {
-      throw new Error(String((json && json.error) || ('HTTP ' + res.status)));
-    }
-    return json; // { ok:true, id, url|link }
-  }
-
-  // Write one cell to the Sheet without CORS preflight.
-  // Requires your Code.gs to handle fn=savefield (field must match header in the Sheet).
-  async function writeLinkToSheet(stableId, header, driveLink) {
-    if (!window.WEBAPP_URL) throw new Error('WEBAPP_URL is not set');
-    if (!stableId || !header || !driveLink) return;
-
-    const form = new URLSearchParams();
-    form.set('fn', 'savefield');
-    form.set('stableId', String(stableId));
-    form.set('field', header);        // MUST match the Sheet header exactly (e.g., "Alarm Photo:")
-    form.set('value', driveLink);
-
-    const res = await fetch(window.WEBAPP_URL, { method: 'POST', body: form });
-    let j = {};
-    try { j = await res.json(); } catch (_) {}
-    if (!res.ok || j.ok === false) {
-      throw new Error((j && j.error) || ('HTTP ' + res.status));
+    // Try multipart first
+    try{
+      const fd = new FormData();
+      fd.append('fn', 'upload');
+      fd.append('folderId', folderId);
+      fd.append('name', file.name);
+      fd.append('file', file, file.name);
+      const res = await fetch(window.WEBAPP_URL, { method: 'POST', body: fd, credentials: 'omit' });
+      const json = await res.json();
+      if (res.ok && json && json.ok) return json;
+      if (json && /No file field/i.test(String(json.error||''))) throw new Error('fallback-b64');
+      throw new Error(json && json.error || ('HTTP ' + res.status));
+    }catch(err){
+      if (String(err.message) !== 'fallback-b64') throw err;
+      // Fallback: base64
+      const dataUrl = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onerror = () => reject(new Error('reader'));
+        fr.onload = () => resolve(fr.result);
+        fr.readAsDataURL(file);
+      });
+      const fd2 = new FormData();
+      fd2.append('fn','uploadB64');
+      fd2.append('folderId', folderId);
+      fd2.append('name', file.name);
+      fd2.append('dataUrl', dataUrl);
+      const res2 = await fetch(window.WEBAPP_URL, { method: 'POST', body: fd2, credentials: 'omit' });
+      const json2 = await res2.json();
+      if (!res2.ok || !json2.ok) throw new Error(json2.error || ('HTTP ' + res2.status));
+      return json2;
     }
   }
 
@@ -174,7 +174,7 @@
       if (!secEl) return;
       const bar = ensureSectionHeaderControls(secEl);
       if (!bar) return;
-      if (bar.querySelector('[data-hfd-upload="'+header+'"]')) return;
+      if (bar.querySelector('[data-hfd-upload=\"' + header + '\"]')) return;
 
       const btn = document.createElement('button');
       btn.className = 'btn';
@@ -196,13 +196,14 @@
       btn.addEventListener('click', ()=> inp.click());
       inp.addEventListener('change', async ()=>{
         if (!inp.files || !inp.files.length) return;
+        const folderId = PHOTO_UPLOAD_FOLDERS[header] || '';
+        if (!folderId){ alert('No folder ID set for \"' + header + '\"'); inp.value=''; return; }
         const prev = btn.textContent; btn.disabled = true; btn.textContent = 'Uploading…';
         const links = [];
         try{
           for (const f of inp.files){
-            const out = await uploadOneFileToDrive(f, header);
-            const link = out.link || out.url || (out.id ? ('https://drive.google.com/uc?export=view&id=' + out.id) : '');
-            if (link) links.push(link);
+            const { link } = await uploadOneFileToDrive(f, folderId);
+            links.push(link);
           }
         }catch(e){
           console.error(e); alert('Upload failed: ' + e.message);
@@ -215,13 +216,6 @@
           const base = (rec && rec[header]) ? String(rec[header]).trim() : '';
           const csv = [base, links.join(', ')].filter(Boolean).join(', ');
           if (window._currentRecord) window._currentRecord[header] = csv;
-          appendPreviews(header, links);
-
-          // Immediately write to the sheet as well (best effort)
-          const sid = (window._currentRecord['Stable ID'] || window._currentRecord['Stable ID:'] || '').toString().trim();
-          if (sid && csv){
-            try { await writeLinkToSheet(sid, header, csv); } catch(e){ console.warn('savefield failed', e); }
-          }
         }catch(e){}
       });
     });
@@ -238,93 +232,4 @@
   setInterval(()=>{
     if (modal && modal.open && modal.classList.contains('editing')) mountButtons();
   }, 800);
-})();
-
-/* === SAVE SHIM: reliable, CORS-safe save for edited fields === */
-(function(){
-  if (window.__HFD_SAVE_SHIM__) return;
-  window.__HFD_SAVE_SHIM__ = true;
-
-  // Use your injector's getModal if present; otherwise a simple fallback:
-  const getModal = () => document.getElementById('recordModal') || document.getElementById('popup-modal');
-
-  // CORS-safe POST (no custom headers)
-  async function postForm(obj){
-    if (!window.WEBAPP_URL) throw new Error('WEBAPP_URL is not set');
-    const form = new URLSearchParams();
-    for (const [k,v] of Object.entries(obj)) form.set(k, v == null ? '' : String(v));
-    const res = await fetch(window.WEBAPP_URL, { method: 'POST', body: form });
-    let json = {};
-    try { json = await res.json(); } catch(_){ throw new Error('Failed to fetch'); }
-    if (!res.ok || json.ok === false) throw new Error(String(json.error || ('HTTP '+res.status)));
-    return json;
-  }
-
-  // Fallback collector (in case the page’s collectFromPopup misses any edited fields)
-  function collectFromPopupShim(){
-    const modal = getModal();
-    const payload = {};
-    if (!modal) return payload;
-
-    // read all .kv rows: header in .k, value in .v or an input/select/textarea
-    modal.querySelectorAll('.kv').forEach(row=>{
-      const kEl = row.querySelector('.k');
-      const vEl = row.querySelector('.v');
-      if (!kEl || !vEl) return;
-
-      let header = (kEl.textContent || '').replace(/\u00a0/g,' ').trim();
-      if (!/:$/.test(header)) header += ':';                  // enforce trailing colon to match Sheet headers
-
-      let value = '';
-      const field = vEl.querySelector('input,select,textarea');
-      if (field) {
-        if (field.tagName === 'SELECT') value = field.value;
-        else if (field.type === 'checkbox') value = field.checked ? 'Yes' : 'No';
-        else value = field.value || '';
-      } else {
-        value = (vEl.textContent || '').trim();
-      }
-      payload[header] = value;
-    });
-
-    // ensure Stable ID present (row key)
-    const sid = (window._currentRecord && (window._currentRecord['Stable ID'] || window._currentRecord['Stable ID:'])) || '';
-    if (sid && !payload['Stable ID'] && !payload['Stable ID:']) payload['Stable ID'] = String(sid);
-
-    // merge photo links from memory (so photos persist even if fields are hidden)
-    if (window._currentRecord) {
-      Object.keys(window._currentRecord).forEach(h=>{
-        if (/:$/.test(h) && window._currentRecord[h]) payload[h] = window._currentRecord[h];
-      });
-    }
-    return payload;
-  }
-
-  // Wrap the page’s save; send a form-encoded fn=save with full payload
-  (function patchSave(){
-    const oldSave = window.saveEdits;
-    window.saveEdits = async function(){
-      try{
-        const payload = (typeof window.collectFromPopup === 'function')
-          ? window.collectFromPopup()
-          : collectFromPopupShim();
-
-        // if both "Stable ID" and "Stable ID:" exist, keep one canonical key
-        if (payload['Stable ID:'] && !payload['Stable ID']) payload['Stable ID'] = payload['Stable ID:'];
-
-        // send to Apps Script as form-encoded — no preflight from file://
-        await postForm({ fn: 'save', payload: JSON.stringify(payload) });
-        alert('Saved ✔');
-      }catch(e){
-        console.error(e);
-        alert('Save failed: ' + e.message);
-        throw e;
-      }finally{
-        // preserve original behavior if the page expects it
-        if (typeof oldSave === 'function') {
-          try { return oldSave.apply(this, arguments); } catch(_) {}
-        }
-      }
-    };
-  })();
 })();

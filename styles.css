@@ -180,38 +180,3 @@ body.modal-open {
 
 /* Hide photo grids in the 'Other' section inside the popup */
 #recordModal .section[data-color="other"] .thumb-grid { display: none !important; }
-
-
-
-/* === Modal centering override (2025-11-03) ===
-   Fixes "shifted-left until certain width" by avoiding left:50% + translate.
-   Uses left:0/right:0 + auto margins for robust centering across desktop/iOS.
-*/
-.modal{ width: min(920px, 92vw); }
-
-.modal[open]{
-  position: fixed !important;
-  left: 0 !important;
-  right: 0 !important;
-  top: max(16px, env(safe-area-inset-top, 0px)) !important;
-  margin-left: auto !important;
-  margin-right: auto !important;
-  transform: none !important;
-  z-index: 1001;
-  box-shadow: 0 10px 30px rgba(0,0,0,.25);
-}
-
-/* Keep header visible while scrolling long content */
-@supports (position: sticky) {
-  .modal-head{
-    position: sticky;
-    top: calc(env(safe-area-inset-top, 0px) + 6px);
-    background: #fff;
-    z-index: 5;
-  }
-}
-
-/* Ensure backdrop shows in fallback mode (no showModal) */
-.modal-backdrop{ position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 1000; }
-.modal-backdrop[hidden]{ display: none; }
-

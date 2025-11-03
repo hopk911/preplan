@@ -1,0 +1,6 @@
+
+/* Apparatus Staging section color (dark gray) */
+:root { --c-staging: #374151; } /* Tailwind slate-700-like */
+
+.section-nav .chip[data-color="staging"] { background: var(--c-staging); color: #fff; }
+.section[data-color="staging"] h3 { background: var(--c-staging); color: #fff; }
