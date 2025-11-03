@@ -1,3 +1,23 @@
+
+;(()=>{
+  try{
+    const css = `
+/* Building Construction (dark red) */
+.pill.bldg{background:#8B0000!important;border-color:#5A0000!important;color:#fff!important}
+.pill.bldg:hover{filter:brightness(1.05)}
+.section-bldg .section-header,
+.section.bldg .section-header{background:#8B0000!important;border-bottom:2px solid #5A0000!important;color:#fff!important}
+.section.bldg .pill, .tab.bldg{background:#8B0000!important;color:#fff!important}
+`;
+    if (!document.getElementById('bldg-color-style')){
+      const s = document.createElement('style');
+      s.id = 'bldg-color-style';
+      s.type = 'text/css';
+      s.appendChild(document.createTextNode(css));
+      document.head.appendChild(s);
+    }
+  }catch(e){}
+})();
 /* HFD Pre-Plan — single-file bundle
    - Merges: drive-only thumbnail helper + main app logic
    - No prototype monkey-patching; no duplicate globals
