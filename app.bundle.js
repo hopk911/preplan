@@ -96,7 +96,7 @@ const FIELD_ORDER = {
   other: [
     'Business Name:', 'Address:', 'Knox Box Location:', 'Closest Hydrant:', 'Contact Name (1):', 'Contact Number (1):', 'Contact Name (2):', 'Contact Number (2):'
   ],
-    apparatus: [
+  apparatus: [
     'Ladder:',	'Engine:',	'Tanker:',	'Rescue:',	'Other Apparatus:'
   ]
 };
@@ -363,7 +363,7 @@ SECTION_CONFIG.forEach(sc => { if (!buckets[sc.id]) buckets[sc.id] = { kv: [], p
     }
     let html='';
     for(const sc of SECTION_CONFIG){
-  const bucket = buckets[sc.id] || { kv: [], photos: [] }; const kv = bucket.kv || []; const photos = bucket.photos || [];
+  const bucket = buckets[sc.id] || { kv: [], photos: [] }; let kv = bucket.kv || []; let photos = bucket.photos || [];
   // ensure placeholder rows from FIELD_ORDER if empty
   try {
     if ((!kv || kv.length===0) && typeof FIELD_ORDER==='object'){
@@ -374,9 +374,7 @@ SECTION_CONFIG.forEach(sc => { if (!buckets[sc.id]) buckets[sc.id] = { kv: [], p
     }
   } catch(_e){}
   if (Array.isArray(kv) && typeof _orderFor==='function') kv.sort(_orderFor(sc.id));
-const {kv,photos
-}=buckets[sc.id];
-      if(Array.isArray(kv)) kv.sort(_orderFor(sc.id)); if(!kv.length && !photos.length && !(window && window._isNewDraft)) continue;
+if(Array.isArray(kv)) kv.sort(_orderFor(sc.id)); if(!kv.length && !photos.length && !(window && window._isNewDraft)) continue;
       const label = sc.id==='other' ? title : sc.label;
       html += `<section id="section-${sc.id}" class="section" data-color="${sc.color}">
         <h3>${label}</h3>
