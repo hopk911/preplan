@@ -135,7 +135,12 @@ function _orderFor(sectionId){
   };
 
   const FIELD_PATTERNS = [
-            [/^Address:?$/i,'other'],
+    [/^Ladder:?$/i,'staging'],
+    [/^Engine:?$/i,'staging'],
+    [/^Tanker:?$/i,'staging'],
+    [/^Rescue:?$/i,'staging'],
+    [/^Other Apparatus:?$/i,'staging'],
+[/^Address:?$/i,'other'],
     [/^Closest Hydrant:?$/i,'other'],
     [/^Knox Box Location:?$/i,'other'],
 [ /^Number of Stories:?$/i,'bldg' ],
