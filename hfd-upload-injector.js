@@ -186,7 +186,7 @@ async function uploadOneFileToDrive(file, fieldHeader){
         const links = [];
         try{
           for (const f of inp.files){
-            const out = await uploadOneFileToDrive(f, PHOTO_UPLOAD_FOLDERS[header] || '', header);
+			const out = await uploadOneFileToDrive(f, header);
             const link = out.link || out.url || (out.id ? ('https://drive.google.com/uc?export=view&id=' + out.id) : '');
             if (link) links.push(link);
           }
