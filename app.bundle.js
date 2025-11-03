@@ -60,8 +60,8 @@ const FIELD_ORDER = {
   ],
 
   bldg: [
-    'Number of Stories:', 'Occupancy:', 'Occupancy Notes:',
-    'Construction Type:', 'Construction Type Notes:',
+    'Occupancy:', 'Occupancy Notes:','Construction Type:', 
+    'Construction Type Notes:', 'Number of Stories:',
     'Roof Type:', 'Basement:'
   ],
   fire: [
@@ -94,7 +94,10 @@ const FIELD_ORDER = {
     'Combustibles Location:', 'Flammables Location:', 'MSDS Location:', 'Hazmat Notes:'
   ],
   other: [
-    'Address:', 'Knox Box Location:', 'Closest Hydrant:'
+    'Business Name:', 'Address:', 'Knox Box Location:', 'Closest Hydrant:', 'Contact Name (1):', 'Contact Number (1):', 'Contact Name (2):', 'Contact Number (2):'
+  ],
+    apparatus: [
+    'Ladder:',	'Engine:',	'Tanker:',	'Rescue:',	'Other Apparatus:'
   ]
 };
 function _normKeyLabel(s){ return String(s||'').toLowerCase().replace(/:\s*$/,'').trim(); }
@@ -131,7 +134,7 @@ function _orderFor(sectionId){
   };
 
   const FIELD_PATTERNS = [
-    [/^Ladder:?$/i,'staging'],
+                [/^Ladder:?$/i,'staging'],
     [/^Engine:?$/i,'staging'],
     [/^Tanker:?$/i,'staging'],
     [/^Rescue:?$/i,'staging'],
@@ -345,7 +348,7 @@ function renderPhotosBlock(items){ return items.length?`<div class="thumb-grid">
     });
 
     // Buckets
-    const buckets={}; SECTION_CONFIG.forEach(sc=>buckets[sc.id]={kv:[],photos:[]});
+    const buckets={}; SECTION_CONFIG.forEach(sc=>{ if(!buckets[sc.id]) buckets[sc.id]={kv:[],photos:[]}; });
     for(const h of headers){
       if(isHiddenInModal(h)) continue;
       const sec=sectionForField(h);
@@ -353,12 +356,12 @@ function renderPhotosBlock(items){ return items.length?`<div class="thumb-grid">
         const urls=String(rec[h]||'').split(/[\,\r\n]+|\s{2,}|,\s*/).filter(Boolean);
         for(const u of urls) buckets[sec].photos.push({url:u,sectionId:sec});
       } else {
-        const val=String(rec[h]??''); buckets[sec].kv.push({h:h, html: renderKV(h,val)});
+        const val=String(rec[h]??''); (buckets[sec]||(buckets[sec]={kv:[],photos:[]})).kv.push({h:h, html: renderKV(h,val)});
       }
     }
     let html='';
     for(const sc of SECTION_CONFIG){
-      const {kv,photos}=buckets[sc.id];
+      const bucket=(buckets[sc.id]||{kv:[],photos:[]}); const kv=bucket.kv||[]; const photos=bucket.photos||[];
       if(Array.isArray(kv)) kv.sort(_orderFor(sc.id)); if(!kv.length && !photos.length && !(window && window._isNewDraft)) continue;
       const label = sc.id==='other' ? title : sc.label;
       html += `<section id="section-${sc.id}" class="section" data-color="${sc.color}">
