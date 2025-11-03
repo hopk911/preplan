@@ -1,6 +1,0 @@
-/* table.css — responsive table with sticky header */
-.table{width:100%}
-.table table{width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden}
-.table th,.table td{padding:10px 12px; border-bottom:1px solid #f0f0f2; text-align:left; font-size:14px}
-.table th{background:#fafafc; position:sticky; top:64px; z-index:1}
-.table tr:hover{background:var(--hover)}
