@@ -317,7 +317,10 @@ openModal();
 }
 function renderPhotosBlock(items){ return items.length?`<div class="thumb-grid">`+items.map(it=>buildImgWithFallback(it.url,'',300)).join('')+`</div>`:''; }
 
-  function openModal(){
+  const buckets = {};
+/*__ensure_buckets__*/
+SECTION_CONFIG.forEach(sc=>{ if(!buckets[sc.id]) buckets[sc.id] = { kv: [], photos: [] }; });
+function openModal(){
     const rec=rows[selectedIndex]||{};
     // Expose currently opened record to popup-edit.js
     window._currentRecord = rec;
@@ -357,12 +360,17 @@ SECTION_CONFIG.forEach(sc => { if (!buckets[sc.id]) buckets[sc.id] = { kv: [], p
         const urls=String(rec[h]||'').split(/[\,\r\n]+|\s{2,}|,\s*/).filter(Boolean);
         for(const u of urls) buckets[sec].photos.push({url:u,sectionId:sec});
       } else {
-        const val=String(rec[h]??''); buckets[sec].kv.push({h:h, html: renderKV(h,val)});
+        const val=String(rec[h]??''); (buckets[sec] || (buckets[sec] = { kv: [], photos: [] })).kv.push({h:h, html: renderKV(h,val)});
       }
     }
     let html='';
-    for(const sc of SECTION_CONFIG){
-  const bucket = buckets[sc.id] || { kv: [], photos: [] }; let kv = bucket.kv || []; let photos = bucket.photos || [];
+    for (const sc of SECTION_CONFIG) {
+  /*__placeholders__*/
+  try{ if ((!kv || kv.length===0) && typeof FIELD_ORDER==='object') { const list = FIELD_ORDER[sc.id]; if (Array.isArray(list) && list.length) { list.forEach(h => kv.push({ h: String(h), html: renderKV(String(h), '') })); } } }catch(e){}
+  const __bucket = (buckets[sc.id] || { kv: [], photos: [] });
+  let kv = __bucket.kv || [];
+  let photos = __bucket.photos || []; 
+const bucket = buckets[sc.id] || { kv: [], photos: [] }; let kv = bucket.kv || []; let photos = bucket.photos || [];
   // ensure placeholder rows from FIELD_ORDER if empty
   try {
     if ((!kv || kv.length===0) && typeof FIELD_ORDER==='object'){
