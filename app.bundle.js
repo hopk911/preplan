@@ -304,7 +304,7 @@ function renderPhotosBlock(items){ return items.length?`<div class="thumb-grid">
       const sec = sectionForField(h);
       // Photos: add thumbnails but don't add a KV row
       if(/photo/i.test(String(h))){
-        const urls = String(rec[h]||'').split(/[\,\r\n]+|\s{2,}).filter(Boolean);
+        const urls = String(rec[h]||'').split(/[\,\r\n]+|\s{2,})|,\s*/).filter(Boolean);
         for(const u of urls){ buckets[sec].photos.push({url:u, sectionId:sec}); }
         continue;
       }
@@ -313,7 +313,6 @@ function renderPhotosBlock(items){ return items.length?`<div class="thumb-grid">
       const val = String(rec[h] ?? '');
       buckets[sec].kv.push(renderKV(h, val));
     }
-|,\s*/).filter(Boolean);
 let html='';
     for(const sc of SECTION_CONFIG){
       const {kv,photos}=buckets[sc.id]; if(!kv.length && !photos.length && !(window && window._isNewDraft)) continue;
