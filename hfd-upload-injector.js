@@ -107,6 +107,23 @@
  // drop-in replacement: NO custom headers → NO preflight
 async function uploadOneFileToDrive(file, fieldHeader){
   if (!window.WEBAPP_URL) throw new Error('WEBAPP_URL is not set');
+// Derive a shareable link from the upload response
+const driveLink = out.link || out.url || (out.id ? ('https://drive.google.com/uc?export=view&id=' + out.id) : '');
+
+// Update the in-memory record so the UI reflects it right away
+window._currentRecord = window._currentRecord || {};
+window._currentRecord[header] = driveLink;
+
+// Best-effort immediate persist to the Sheet
+try {
+  // Your key column must be exactly "Stable ID" or "Stable ID:"
+  const sid = (window._currentRecord['Stable ID'] || window._currentRecord['Stable ID:'] || '').toString().trim();
+  if (sid && driveLink) {
+    await writeLinkToSheet(sid, header, driveLink);
+  }
+} catch (e) {
+  console.warn('savefield failed (will still persist on full Save):', e);
+}
 
   // read the file as a data URL (iOS/Safari-safe)
   const dataUrl = await new Promise((resolve, reject) => {
@@ -206,6 +223,26 @@ async function uploadOneFileToDrive(file, fieldHeader){
       });
     });
   }
+  
+// Write one cell to the Sheet without CORS preflight.
+// Requires your Code.gs to handle fn=savefield (field must match header in the Sheet).
+async function writeLinkToSheet(stableId, header, driveLink) {
+  if (!window.WEBAPP_URL) throw new Error('WEBAPP_URL is not set');
+  if (!stableId || !header || !driveLink) return;
+
+  const form = new URLSearchParams();
+  form.set('fn', 'savefield');
+  form.set('stableId', String(stableId));
+  form.set('field', header);        // MUST match the Sheet header exactly (e.g., "Alarm Photo:")
+  form.set('value', driveLink);
+
+  const res = await fetch(window.WEBAPP_URL, { method: 'POST', body: form });
+  let j = {};
+  try { j = await res.json(); } catch (_) {}
+  if (!res.ok || j.ok === false) {
+    throw new Error((j && j.error) || ('HTTP ' + res.status));
+  }
+}
 
   // Re-mount buttons whenever the modal switches to edit mode
   if (modal){
