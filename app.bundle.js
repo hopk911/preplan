@@ -99,7 +99,7 @@ function buildImgWithFallback(srcOrId, cls, size){
 [/^\s*Construction Type\s*:?\s*$/i,'bldg'],
 [/^\s*Construction Type Notes\s*:?\s*$/i,'bldg'],
 [/^\s*Roof Type\s*:?\s*$/i,'bldg'],
-[/^\s*Basement\s*:?\s*$/i,'bldg'],,
+[/^\s*Basement\s*:?\s*$/i,'bldg'],
 [/^Remote Alarm Location:?$/i,'fire'],
     [/^Sprinkler Main Shutoff Location:?$/i,'fire'],
     [/^Roof Type:?$/i,'other'],
@@ -308,8 +308,7 @@ if(/photo/i.test(String(h))){
   continue;
 }
 if(isHiddenInModal(h)) continue;
-const val=String(rec[h]??''); buckets[sec].kv.push(renderKV(h,val));
-    }|,\s*/).filter(Boolean);
+const val=String(rec[h]??''); buckets[sec].kv.push(renderKV(h,val));}|,\s*/).filter(Boolean);
         for(const u of urls) buckets[sec].photos.push({url:u,sectionId:sec});
       } else {
         const val=String(rec[h]??''); buckets[sec].kv.push(renderKV(h,val));
