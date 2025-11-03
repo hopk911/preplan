@@ -55,12 +55,6 @@ function buildImgWithFallback(srcOrId, cls, size){
   { id:'hazmat',    label:'Hazmat',    color:'hazmat'    }
 ];
 
-   .section[data-color="other"] > h3 {
-  display: flex !important;
-  justify-content: center !important;
-  text-align: center !important;
-}
-
 ;(()=>{
   try{
     const css = `
@@ -70,6 +64,11 @@ function buildImgWithFallback(srcOrId, cls, size){
   background:#333!important;
   color:#fff!important;
   border-bottom:2px solid #222!important;
+.section[data-color="other"] > h3 {
+  display: flex !important;
+  justify-content: center !important;
+  text-align: center !important;
+}
 }
 /* If you want the whole section body dark too, uncomment:
 .section[data-color="staging"]{ background:#2b2b2b!important; color:#fff!important }
