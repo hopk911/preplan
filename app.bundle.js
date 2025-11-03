@@ -83,7 +83,7 @@ function buildImgWithFallback(srcOrId, cls, size){
   ,
     { key:'fdc',       label:'FDC',              getter:r=>getField(r,['FDC','FDC Location','Fire Department Connection','FDC:']) }];
 
-  const BASE_HIDE_IN_MODAL = ['timestamp','time stamp','stable id','stableid','address','closest hydrant','knox box location'];
+  const BASE_HIDE_IN_MODAL = ['timestamp','time stamp','stable id','stableid','address','closest hydrant','knox box location','photo'];
   const normalizeKey = k => String(k||'').toLowerCase().replace(/[:\s]+$/,'').replace(/[^a-z0-9]+/g,' ').trim();
   const isHiddenInModal = k => {
     const m = document.getElementById('recordModal');
@@ -99,7 +99,7 @@ function buildImgWithFallback(srcOrId, cls, size){
 [/^\s*Construction Type\s*:?\s*$/i,'bldg'],
 [/^\s*Construction Type Notes\s*:?\s*$/i,'bldg'],
 [/^\s*Roof Type\s*:?\s*$/i,'bldg'],
-[/^\s*Basement\s*:?\s*$/i,'bldg'],
+[/^\s*Basement\s*:?\s*$/i,'bldg'],,
 [/^Remote Alarm Location:?$/i,'fire'],
     [/^Sprinkler Main Shutoff Location:?$/i,'fire'],
     [/^Roof Type:?$/i,'other'],
@@ -301,10 +301,15 @@ function renderPhotosBlock(items){ return items.length?`<div class="thumb-grid">
     // Buckets
     const buckets={}; SECTION_CONFIG.forEach(sc=>buckets[sc.id]={kv:[],photos:[]});
     for(const h of headers){
-      if(isHiddenInModal(h)) continue;
       const sec=sectionForField(h);
-      if(/photo/i.test(String(h))){
-        const urls=String(rec[h]||'').split(/[\,\r\n]+|\s{2,}|,\s*/).filter(Boolean);
+if(/photo/i.test(String(h))){
+  const urls=String(rec[h]||'').split(/[\,\r\n]+|\s{2,}|,\s*/).filter(Boolean);
+  for(const u of urls) buckets[sec].photos.push({url:u,sectionId:sec});
+  continue;
+}
+if(isHiddenInModal(h)) continue;
+const val=String(rec[h]??''); buckets[sec].kv.push(renderKV(h,val));
+    }|,\s*/).filter(Boolean);
         for(const u of urls) buckets[sec].photos.push({url:u,sectionId:sec});
       } else {
         const val=String(rec[h]??''); buckets[sec].kv.push(renderKV(h,val));
