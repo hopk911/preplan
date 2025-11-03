@@ -62,7 +62,7 @@ function buildImgWithFallback(srcOrId, cls, size){
     { key:'hydrant',   label:'Closest Hydrant',  getter:r=>getField(r,['Closest Hydrant','Closest Hydrant:','Nearest Hydrant','Hydrant Location']) }
   ];
 
-  const BASE_HIDE_IN_MODAL = ['timestamp','time stamp','stable id','stableid','address','closest hydrant','knox box location'];
+  const BASE_HIDE_IN_MODAL = ['timestamp','time stamp','stable id','stableid'];
   const normalizeKey = k => String(k||'').toLowerCase().replace(/[:\s]+$/,'').replace(/[^a-z0-9]+/g,' ').trim();
   const isHiddenInModal = k => {
     const m = document.getElementById('recordModal');
