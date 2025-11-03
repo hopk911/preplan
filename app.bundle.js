@@ -55,6 +55,12 @@ function buildImgWithFallback(srcOrId, cls, size){
   { id:'hazmat',    label:'Hazmat',    color:'hazmat'    }
 ];
 
+   .section[data-color="other"] > h3 {
+  display: flex !important;
+  justify-content: center !important;
+  text-align: center !important;
+}
+
 ;(()=>{
   try{
     const css = `
