@@ -99,7 +99,7 @@ function buildImgWithFallback(srcOrId, cls, size){
 [/^\s*Construction Type\s*:?\s*$/i,'bldg'],
 [/^\s*Construction Type Notes\s*:?\s*$/i,'bldg'],
 [/^\s*Roof Type\s*:?\s*$/i,'bldg'],
-[/^\s*Basement\s*:?\s*$/i,'bldg'],
+[/^\s*Basement\s*:?\s*$/i,'bldg'],,
 [/^Remote Alarm Location:?$/i,'fire'],
     [/^Sprinkler Main Shutoff Location:?$/i,'fire'],
     [/^Roof Type:?$/i,'other'],
@@ -301,20 +301,20 @@ function renderPhotosBlock(items){ return items.length?`<div class="thumb-grid">
     // Buckets
     const buckets={}; SECTION_CONFIG.forEach(sc=>buckets[sc.id]={kv:[],photos:[]});
     for(const h of headers){
-      const sec=sectionForField(h);
-if(/photo/i.test(String(h))){
-  const urls=String(rec[h]||'').split(/[\,\r\n]+|\s{2,}|,\s*/).filter(Boolean);
-  for(const u of urls) buckets[sec].photos.push({url:u,sectionId:sec});
-  continue;
-}
-if(isHiddenInModal(h)) continue;
-const val=String(rec[h]??''); buckets[sec].kv.push(renderKV(h,val));}|,\s*/).filter(Boolean);
-        for(const u of urls) buckets[sec].photos.push({url:u,sectionId:sec});
-      } else {
-        const val=String(rec[h]??''); buckets[sec].kv.push(renderKV(h,val));
+      const sec = sectionForField(h);
+      // Photos: add thumbnails but don't add a KV row
+      if(/photo/i.test(String(h))){
+        const urls = String(rec[h]||'').split(/[\,\r\n]+|\s{2,}|,\s*/).filter(Boolean);
+        for(const u of urls){ buckets[sec].photos.push({url:u, sectionId:sec}); }
+        continue;
       }
+      // Hide some keys in view mode
+      if(isHiddenInModal(h)) continue;
+      const val = String(rec[h] ?? '');
+      buckets[sec].kv.push(renderKV(h, val));
     }
-    let html='';
+|,\s*/).filter(Boolean);
+let html='';
     for(const sc of SECTION_CONFIG){
       const {kv,photos}=buckets[sc.id]; if(!kv.length && !photos.length && !(window && window._isNewDraft)) continue;
       const label = sc.id==='other' ? title : sc.label;
