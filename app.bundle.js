@@ -348,7 +348,9 @@ function renderPhotosBlock(items){ return items.length?`<div class="thumb-grid">
     });
 
     // Buckets
-    const buckets={}; SECTION_CONFIG.forEach(sc=>{ if(!buckets[sc.id]) buckets[sc.id]={kv:[],photos:[]}; });
+    const buckets={}; SECTION_CONFIG.forEach(sc=>buckets[sc.id]={kv:[],photos:[]});
+// Defensive: ensure buckets exist
+SECTION_CONFIG.forEach(sc => { if (!buckets[sc.id]) buckets[sc.id] = { kv: [], photos: [] }; });
     for(const h of headers){
       if(isHiddenInModal(h)) continue;
       const sec=sectionForField(h);
@@ -356,12 +358,24 @@ function renderPhotosBlock(items){ return items.length?`<div class="thumb-grid">
         const urls=String(rec[h]||'').split(/[\,\r\n]+|\s{2,}|,\s*/).filter(Boolean);
         for(const u of urls) buckets[sec].photos.push({url:u,sectionId:sec});
       } else {
-        const val=String(rec[h]??''); (buckets[sec]||(buckets[sec]={kv:[],photos:[]})).kv.push({h:h, html: renderKV(h,val)});
+        const val=String(rec[h]??''); buckets[sec].kv.push({h:h, html: renderKV(h,val)});
       }
     }
     let html='';
     for(const sc of SECTION_CONFIG){
-      const bucket=(buckets[sc.id]||{kv:[],photos:[]}); const kv=bucket.kv||[]; const photos=bucket.photos||[];
+  const bucket = buckets[sc.id] || { kv: [], photos: [] }; const kv = bucket.kv || []; const photos = bucket.photos || [];
+  // ensure placeholder rows from FIELD_ORDER if empty
+  try {
+    if ((!kv || kv.length===0) && typeof FIELD_ORDER==='object'){
+      const list = FIELD_ORDER[sc.id];
+      if (Array.isArray(list) && list.length){
+        list.forEach(function(h){ kv.push({ h: String(h), html: renderKV(String(h), '') }); });
+      }
+    }
+  } catch(_e){}
+  if (Array.isArray(kv) && typeof _orderFor==='function') kv.sort(_orderFor(sc.id));
+const {kv,photos
+}=buckets[sc.id];
       if(Array.isArray(kv)) kv.sort(_orderFor(sc.id)); if(!kv.length && !photos.length && !(window && window._isNewDraft)) continue;
       const label = sc.id==='other' ? title : sc.label;
       html += `<section id="section-${sc.id}" class="section" data-color="${sc.color}">
