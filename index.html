@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HFD Pre-Plan</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/nav.css" />
+  <link rel="stylesheet" href="css/table.css" />
+  <link rel="stylesheet" href="css/modal.css" />
+  <link rel="stylesheet" href="css/mobile.css" />
+
+  <link rel="icon" href="data:," />
+<script>
+    // Runtime config
+    window.WEBAPP_URL = window.WEBAPP_URL || "https://script.google.com/macros/s/AKfycbw21onFylHT5cxgLf5sZFeivQKL8T80czFd-IJGSJF4hU-08bUM-7Ugje4fg4nMAZnR2A/exec";
+    window.GOOGLE_SHEET_JSON_URL = window.GOOGLE_SHEET_JSON_URL || "";
+    window.EDIT_SECRET = window.EDIT_SECRET || "changeme";
+    
+    // --- robust WEBAPP_URL resolution ---
+    (function(){
+      const qs = new URLSearchParams(location.search);
+      const qp = qs.get('webapp');
+      if (qp) { try { localStorage.setItem('WEBAPP_URL', qp); } catch(e){} }
+      const stored = (function(){ try { return localStorage.getItem('WEBAPP_URL') || ''; } catch(e){ return ''; } })();
+      const looksTruncated = (u)=>!u || u.includes('...') || u.length<40;
+      const looksWrongOrigin = (u)=>!(/^https:\/\/script\.google\.com\//.test(u) || /^http:\/\/localhost/.test(u));
+      if (looksTruncated(window.WEBAPP_URL)) window.WEBAPP_URL = stored || window.WEBAPP_URL;
+      if (looksWrongOrigin(window.WEBAPP_URL) && stored) window.WEBAPP_URL = stored;
+      if (looksTruncated(window.WEBAPP_URL)) {
+        console.error('[config] WEBAPP_URL is missing/invalid. Set it via ?webapp=<url> or localStorage.WEBAPP_URL.');
+      } 
+      
+    })();
+
+    window.__BUILD__ = "popup-edit-2025-10-30T21:03:17";
+  </script>
+  <style>
+    /* Hide any stray main-screen Edit button */
+    #btnEdit{ display:none !important; }
+    /* Visual hint for locked fields */
+    .modal .kv.locked .v{ pointer-events:none; opacity:.8; }
+    .modal .kv.locked .k::after{ content:" (locked)"; font-weight:400; opacity:.7; }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">HFD Pre-Plan</div>
+    <div class="actions">
+      <button id="btnAdd" class="btn">Add New</button>
+      <!-- Main-screen Edit intentionally removed -->
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <input id="searchInput" class="search" placeholder="Search by name, address, keywords…" />
+  </div>
+
+  <section class="card">
+    <table id="dataTable">
+      <thead id="tableHead"></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div class="pager">
+      <button id="prevPage" class="btn secondary">Prev</button>
+      <span id="pageInfo" class="pageinfo"></span>
+      <button id="nextPage" class="btn secondary">Next</button>
+    </div>
+  </section>
+
+  <dialog id="recordModal" class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div id="modalThumbWrap" class="modal-thumb"></div>
+      <h3 id="modalTitle">Record</h3>
+      <button id="btnModalEdit" class="btn">Edit</button>
+      <button id="btnCloseModal" class="btn secondary">Close</button>
+    </div>
+    <div id="sectionNav" class="section-nav"></div>
+    <div id="modalContent" class="modal-content"></div>
+  </dialog>
+  <div id="modalBackdrop" class="modal-backdrop" hidden></div>
+
+  <!-- Shim to neutralize any old bundles that still reference main-screen btnEdit -->
+  <script>
+    if (typeof window.btnEdit === 'undefined') { 
+      window.btnEdit = { addEventListener(){}, set disabled(_){}, get disabled(){ return false; } }; 
+    }
+  </script>
+
+  <!-- Cache-busted bundle and popup editor -->
+<script src="app.bundle.js"></script>
+<script src="popup-edit.js"></script>
+
+<!-- Tiny hotfix: auto-enter editing for brand-new draft so empty fields are visible -->
+<script>
+(function(){
+  function setup(){
+    
+    try{
+      var m=document.getElementById('recordModal');
+      if(m){ if(typeof m.close==='function') m.close(); m.removeAttribute('open'); }
+    }catch(_){}
+var modal = document.getElementById('recordModal');
+    if(!modal) return;
+    var obs = new MutationObserver(function(muts){
+      if (modal.hasAttribute('open') && (window._isNewDraft === true)) {
+        // Defer to allow modal content to render
+        requestAnimationFrame(function(){
+          var btn = document.getElementById('btnModalEdit');
+          if (btn && !modal.classList.contains('editing')) {
+            try { btn.click(); } catch(e){ /* noop */ }
+          }
+        });
+      }
+    });
+    obs.observe(modal, { attributes: true, attributeFilter: ['open'] });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setup);
+  } else {
+    setup();
+  }
+})();
+</script>
+
+<script src="hfd-upload-injector.js"></script>
+<script>
+/* Remove any accidental stray '/1' text or elements (enhanced stray /1 scrub) */
+(function(){
+  try{
+    const scan = ()=>{
+      document.querySelectorAll('body, body *').forEach(n=>{
+        if(n.childNodes) {
+          [...n.childNodes].forEach(c=>{
+            if((c.nodeType===3 && c.textContent && c.textContent.trim()==='/1') || (c.nodeType===1 && c.childNodes.length===1 && c.textContent && c.textContent.trim()==='/1')){
+              c.parentNode.removeChild(c);
+            }
+          });
+        }
+      });
+    };
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', scan);
+    else scan();
+  }catch(e){}
+})();
+</script>
+
+<script>
+// Force table refresh if a new draft was opened and then closed without saving
+(function(){
+  var modal = document.getElementById('recordModal');
+  var search = document.getElementById('searchInput');
+  if (!modal || !search) return;
+
+  function refreshTableViaSearch(){
+    try {
+      // Toggle a space to trigger the debounced onSearch in the bundle
+      var v = search.value || '';
+      search.value = v + ' ';
+      search.dispatchEvent(new Event('input', {bubbles:true}));
+      setTimeout(function(){
+        search.value = v.trim();
+        search.dispatchEvent(new Event('input', {bubbles:true}));
+      }, 10);
+    } catch(e){ /* no-op */ }
+  }
+
+  modal.addEventListener('close', function(){
+    try {
+      if (window._isNewDraft === true) {
+        window._isNewDraft = false;
+        refreshTableViaSearch();
+      }
+    } catch(_) {}
+  });
+})();
+</script>
+
+</body>
+</html>
