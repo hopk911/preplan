@@ -92,6 +92,9 @@ const FIELD_ORDER = {
   ],
   other: [
     'Business Name:', 'Address:', 'Knox Box Location:', 'Closest Hydrant:', 'Contact Name (1):', 'Contact Number (1):', 'Contact Name (2):', 'Contact Number (2):'
+  ],
+    apparatus: [
+    'Ladder:',	'Engine:',	'Tanker:',	'Rescue:',	'Other Apparatus:'
   ]
 };
 function _normKeyLabel(s){ return String(s||'').toLowerCase().replace(/:\s*$/,'').trim(); }
