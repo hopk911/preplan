@@ -1,5 +1,3 @@
-
-console.log('[bundle] hardened build 2025-11-03T02:42:40.703876Z');
 /* HFD Pre-Plan — single-file bundle
    - Merges: drive-only thumbnail helper + main app logic
    - No prototype monkey-patching; no duplicate globals
@@ -62,8 +60,8 @@ const FIELD_ORDER = {
   ],
 
   bldg: [
-    'Number of Stories:', 'Occupancy:', 'Occupancy Notes:',
-    'Construction Type:', 'Construction Type Notes:',
+    'Occupancy:', 'Occupancy Notes:','Construction Type:', 
+    'Construction Type Notes:', 'Number of Stories:',
     'Roof Type:', 'Basement:'
   ],
   fire: [
@@ -96,7 +94,10 @@ const FIELD_ORDER = {
     'Combustibles Location:', 'Flammables Location:', 'MSDS Location:', 'Hazmat Notes:'
   ],
   other: [
-    'Address:', 'Knox Box Location:', 'Closest Hydrant:'
+    'Business Name:', 'Address:', 'Knox Box Location:', 'Closest Hydrant:', 'Contact Name (1):', 'Contact Number (1):', 'Contact Name (2):', 'Contact Number (2):'
+  ],
+    apparatus: [
+    'Ladder:',	'Engine:',	'Tanker:',	'Rescue:',	'Other Apparatus:'
   ]
 };
 function _normKeyLabel(s){ return String(s||'').toLowerCase().replace(/:\s*$/,'').trim(); }
@@ -133,12 +134,7 @@ function _orderFor(sectionId){
   };
 
   const FIELD_PATTERNS = [
-                [/^Ladder:?$/i,'staging'],
-    [/^Engine:?$/i,'staging'],
-    [/^Tanker:?$/i,'staging'],
-    [/^Rescue:?$/i,'staging'],
-    [/^Other Apparatus:?$/i,'staging'],
-[/^Address:?$/i,'other'],
+            [/^Address:?$/i,'other'],
     [/^Closest Hydrant:?$/i,'other'],
     [/^Knox Box Location:?$/i,'other'],
 [ /^Number of Stories:?$/i,'bldg' ],
@@ -317,10 +313,7 @@ openModal();
 }
 function renderPhotosBlock(items){ return items.length?`<div class="thumb-grid">`+items.map(it=>buildImgWithFallback(it.url,'',300)).join('')+`</div>`:''; }
 
-  const buckets = {};
-/*__ensure_buckets__*/
-SECTION_CONFIG.forEach(sc=>{ if(!buckets[sc.id]) buckets[sc.id] = { kv: [], photos: [] }; });
-function openModal(){
+  function openModal(){
     const rec=rows[selectedIndex]||{};
     // Expose currently opened record to popup-edit.js
     window._currentRecord = rec;
@@ -351,8 +344,6 @@ function openModal(){
 
     // Buckets
     const buckets={}; SECTION_CONFIG.forEach(sc=>buckets[sc.id]={kv:[],photos:[]});
-// Defensive: ensure buckets exist
-SECTION_CONFIG.forEach(sc => { if (!buckets[sc.id]) buckets[sc.id] = { kv: [], photos: [] }; });
     for(const h of headers){
       if(isHiddenInModal(h)) continue;
       const sec=sectionForField(h);
@@ -360,28 +351,13 @@ SECTION_CONFIG.forEach(sc => { if (!buckets[sc.id]) buckets[sc.id] = { kv: [], p
         const urls=String(rec[h]||'').split(/[\,\r\n]+|\s{2,}|,\s*/).filter(Boolean);
         for(const u of urls) buckets[sec].photos.push({url:u,sectionId:sec});
       } else {
-        const val=String(rec[h]??''); (buckets[sec] || (buckets[sec] = { kv: [], photos: [] })).kv.push({h:h, html: renderKV(h,val)});
+        const val=String(rec[h]??''); buckets[sec].kv.push({h:h, html: renderKV(h,val)});
       }
     }
     let html='';
-    for (const sc of SECTION_CONFIG) {
-  /*__placeholders__*/
-  try{ if ((!kv || kv.length===0) && typeof FIELD_ORDER==='object') { const list = FIELD_ORDER[sc.id]; if (Array.isArray(list) && list.length) { list.forEach(h => kv.push({ h: String(h), html: renderKV(String(h), '') })); } } }catch(e){}
-  const __bucket = (buckets[sc.id] || { kv: [], photos: [] });
-  let kv = __bucket.kv || [];
-  let photos = __bucket.photos || []; 
-const bucket = buckets[sc.id] || { kv: [], photos: [] }; let kv = bucket.kv || []; let photos = bucket.photos || [];
-  // ensure placeholder rows from FIELD_ORDER if empty
-  try {
-    if ((!kv || kv.length===0) && typeof FIELD_ORDER==='object'){
-      const list = FIELD_ORDER[sc.id];
-      if (Array.isArray(list) && list.length){
-        list.forEach(function(h){ kv.push({ h: String(h), html: renderKV(String(h), '') }); });
-      }
-    }
-  } catch(_e){}
-  if (Array.isArray(kv) && typeof _orderFor==='function') kv.sort(_orderFor(sc.id));
-if(Array.isArray(kv)) kv.sort(_orderFor(sc.id)); if(!kv.length && !photos.length && !(window && window._isNewDraft)) continue;
+    for(const sc of SECTION_CONFIG){
+      const {kv,photos}=buckets[sc.id];
+      if(Array.isArray(kv)) kv.sort(_orderFor(sc.id)); if(!kv.length && !photos.length && !(window && window._isNewDraft)) continue;
       const label = sc.id==='other' ? title : sc.label;
       html += `<section id="section-${sc.id}" class="section" data-color="${sc.color}">
         <h3>${label}</h3>
