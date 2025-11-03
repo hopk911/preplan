@@ -53,15 +53,39 @@ function buildImgWithFallback(srcOrId, cls, size){
     { id:'gas',       label:'Gas',       color:'gas'       },
     { id:'hazmat',    label:'Hazmat',    color:'hazmat'    }
   ];
+// ---- Optional per-section field order (top-to-bottom) ----
+const FIELD_ORDER = {
+  bldg: [
+    'Number of Stories:', 'Occupancy:', 'Occupancy Notes:',
+    'Construction Type:', 'Construction Type Notes:',
+    'Roof Type:', 'Basement:'
+  ],
+  other: ['Address:', 'Knox Box Location:', 'Closest Hydrant:'],
+  fire:  ['FDC:', 'Remote Alarm Location:', 'Sprinkler Main Shutoff Location:']
+};
+function _normKeyLabel(s){ return String(s||'').toLowerCase().replace(/:\s*$/,'').trim(); }
+function _orderFor(sectionId){
+  const arr = FIELD_ORDER[sectionId] || [];
+  const idx = new Map(arr.map((h,i)=>[_normKeyLabel(h), i]));
+  return (a, b) => {
+    const ak = (a.h != null ? a.h : a).toString();
+    const bk = (b.h != null ? b.h : b).toString();
+    const ia = idx.has(_normKeyLabel(ak)) ? idx.get(_normKeyLabel(ak)) : 1e6;
+    const ib = idx.has(_normKeyLabel(bk)) ? idx.get(_normKeyLabel(bk)) : 1e6;
+    if (ia !== ib) return ia - ib;
+    return _normKeyLabel(ak).localeCompare(_normKeyLabel(bk));
+  };
+}
+
 
   const TABLE_COLUMNS = [
     { key:'__photo__', label:'Photo',            getter:r=>firstPhotoWithSection(r) },
     { key:'business',  label:'Business Name',    getter:r=>getField(r,['Business Name','Business Name:','Business','Name','Company','Facility Name']) },
     { key:'address',   label:'Address',          getter:r=>getField(r,['Address','Address:','Site Address','Street Address','Location Address']) },
     { key:'knox',      label:'Knox Box Location',getter:r=>getField(r,['Knox Box Location','Knox Box Location:','Knox Location','Knox Box']) },
-    { key:'hydrant',   label:'Closest Hydrant',  getter:r=>getField(r,['Closest Hydrant','Closest Hydrant:','Nearest Hydrant','Hydrant Location']) },
-    { key:'fdc',       label:'FDC',              getter:r=>getField(r,['FDC','FDC:','FDC Location','FDC Location:','Fire Department Connection','Fire Department Connection:']) }
-   ];
+    { key:'fdc',      label:'FDC',              getter:r=>getField(r,['FDC','FDC:','FDC Location','FDC Location:','Fire Department Connection','Fire Department Connection:']) },
+    { key:'hydrant',   label:'Closest Hydrant',  getter:r=>getField(r,['Closest Hydrant','Closest Hydrant:','Nearest Hydrant','Hydrant Location']) }
+  ];
 
   const BASE_HIDE_IN_MODAL = ['timestamp', 'time stamp', 'stable id', 'stableid'];
   const normalizeKey = k => String(k||'').toLowerCase().replace(/[:\s]+$/,'').replace(/[^a-z0-9]+/g,' ').trim();
@@ -290,16 +314,17 @@ function renderPhotosBlock(items){ return items.length?`<div class="thumb-grid">
         const urls=String(rec[h]||'').split(/[\,\r\n]+|\s{2,}|,\s*/).filter(Boolean);
         for(const u of urls) buckets[sec].photos.push({url:u,sectionId:sec});
       } else {
-        const val=String(rec[h]??''); buckets[sec].kv.push(renderKV(h,val));
+        const val=String(rec[h]??''); buckets[sec].kv.push({h:h, html: renderKV(h,val)});
       }
     }
     let html='';
     for(const sc of SECTION_CONFIG){
-      const {kv,photos}=buckets[sc.id]; if(!kv.length && !photos.length && !(window && window._isNewDraft)) continue;
+      const {kv,photos}=buckets[sc.id];
+      if(Array.isArray(kv)) kv.sort(_orderFor(sc.id)); if(!kv.length && !photos.length && !(window && window._isNewDraft)) continue;
       const label = sc.id==='other' ? title : sc.label;
       html += `<section id="section-${sc.id}" class="section" data-color="${sc.color}">
         <h3>${label}</h3>
-        ${kv.length?`<div class="grid">${kv.join('')}</div>`:''}
+        ${kv.length?`<div class="grid">${kv.map(it=>it.html||it).join('')}</div>`:''}
         ${renderPhotosBlock(photos)}
       </section>`;
     }
