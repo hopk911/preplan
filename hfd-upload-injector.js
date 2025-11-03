@@ -239,3 +239,92 @@
     if (modal && modal.open && modal.classList.contains('editing')) mountButtons();
   }, 800);
 })();
+
+/* === SAVE SHIM: reliable, CORS-safe save for edited fields === */
+(function(){
+  if (window.__HFD_SAVE_SHIM__) return;
+  window.__HFD_SAVE_SHIM__ = true;
+
+  // Use your injector's getModal if present; otherwise a simple fallback:
+  const getModal = () => document.getElementById('recordModal') || document.getElementById('popup-modal');
+
+  // CORS-safe POST (no custom headers)
+  async function postForm(obj){
+    if (!window.WEBAPP_URL) throw new Error('WEBAPP_URL is not set');
+    const form = new URLSearchParams();
+    for (const [k,v] of Object.entries(obj)) form.set(k, v == null ? '' : String(v));
+    const res = await fetch(window.WEBAPP_URL, { method: 'POST', body: form });
+    let json = {};
+    try { json = await res.json(); } catch(_){ throw new Error('Failed to fetch'); }
+    if (!res.ok || json.ok === false) throw new Error(String(json.error || ('HTTP '+res.status)));
+    return json;
+  }
+
+  // Fallback collector (in case the page’s collectFromPopup misses any edited fields)
+  function collectFromPopupShim(){
+    const modal = getModal();
+    const payload = {};
+    if (!modal) return payload;
+
+    // read all .kv rows: header in .k, value in .v or an input/select/textarea
+    modal.querySelectorAll('.kv').forEach(row=>{
+      const kEl = row.querySelector('.k');
+      const vEl = row.querySelector('.v');
+      if (!kEl || !vEl) return;
+
+      let header = (kEl.textContent || '').replace(/\u00a0/g,' ').trim();
+      if (!/:$/.test(header)) header += ':';                  // enforce trailing colon to match Sheet headers
+
+      let value = '';
+      const field = vEl.querySelector('input,select,textarea');
+      if (field) {
+        if (field.tagName === 'SELECT') value = field.value;
+        else if (field.type === 'checkbox') value = field.checked ? 'Yes' : 'No';
+        else value = field.value || '';
+      } else {
+        value = (vEl.textContent || '').trim();
+      }
+      payload[header] = value;
+    });
+
+    // ensure Stable ID present (row key)
+    const sid = (window._currentRecord && (window._currentRecord['Stable ID'] || window._currentRecord['Stable ID:'])) || '';
+    if (sid && !payload['Stable ID'] && !payload['Stable ID:']) payload['Stable ID'] = String(sid);
+
+    // merge photo links from memory (so photos persist even if fields are hidden)
+    if (window._currentRecord) {
+      Object.keys(window._currentRecord).forEach(h=>{
+        if (/:$/.test(h) && window._currentRecord[h]) payload[h] = window._currentRecord[h];
+      });
+    }
+    return payload;
+  }
+
+  // Wrap the page’s save; send a form-encoded fn=save with full payload
+  (function patchSave(){
+    const oldSave = window.saveEdits;
+    window.saveEdits = async function(){
+      try{
+        const payload = (typeof window.collectFromPopup === 'function')
+          ? window.collectFromPopup()
+          : collectFromPopupShim();
+
+        // if both "Stable ID" and "Stable ID:" exist, keep one canonical key
+        if (payload['Stable ID:'] && !payload['Stable ID']) payload['Stable ID'] = payload['Stable ID:'];
+
+        // send to Apps Script as form-encoded — no preflight from file://
+        await postForm({ fn: 'save', payload: JSON.stringify(payload) });
+        alert('Saved ✔');
+      }catch(e){
+        console.error(e);
+        alert('Save failed: ' + e.message);
+        throw e;
+      }finally{
+        // preserve original behavior if the page expects it
+        if (typeof oldSave === 'function') {
+          try { return oldSave.apply(this, arguments); } catch(_) {}
+        }
+      }
+    };
+  })();
+})();
