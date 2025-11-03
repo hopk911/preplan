@@ -313,7 +313,7 @@ function renderPhotosBlock(items){ return items.length?`<div class="thumb-grid">
       const val = String(rec[h] ?? '');
       buckets[sec].kv.push(renderKV(h, val));
     }
-,\s*/).filter(Boolean);
+|,\s*/).filter(Boolean);
 let html='';
     for(const sc of SECTION_CONFIG){
       const {kv,photos}=buckets[sc.id]; if(!kv.length && !photos.length && !(window && window._isNewDraft)) continue;
