@@ -1,0 +1,15 @@
+/* nav.css — sticky header / toolbar with centered nav, padding, and bottom border line */
+header.site{
+  position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid var(--line);
+}
+.toolbar{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding-block:12px; /* top & bottom padding */
+}
+.navbar{
+  display:flex; align-items:center; justify-content:center; gap:10px;
+}
+.navbar .btn{border-radius:999px} /* rounded edges */
+.navbar-line{height:1px; background:var(--line-strong);}
+/* Keep nav visible when clicking anchor links (prevents jump loss) */
+:target::before{content:""; display:block; height:64px; margin-top:-64px}

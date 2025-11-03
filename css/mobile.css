@@ -1,0 +1,8 @@
+/* mobile.css — small adjustments for iPhone/iPad widths and safe areas */
+@supports(padding:max(env(safe-area-inset-top),0px)){
+  header.site .toolbar{ padding-top: calc(12px + env(safe-area-inset-top)); }
+}
+@media (max-width:900px){
+  .toolbar{padding-inline:12px}
+  .table th{top:72px}
+}
