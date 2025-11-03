@@ -42,23 +42,24 @@ function buildImgWithFallback(srcOrId, cls, size){
 }
   var loadThumbsWithin = function(){ /* no-op in drive-only mode */ };
 // ---------- Sections & routing ----------
-  const SECTION_CONFIG = [
-    { id:'other',     label:'Other',     color:'other'     },
-    { id:'bldg',      label:'Building Construction', color:'bldg' },
-    { id:'fire',      label:'Fire',      color:'fire'      },
-    { id:'elevators', label:'Elevators', color:'elevators' },
-    { id:'ems',       label:'EMS',       color:'ems'       },
-    { id:'water',     label:'Water',     color:'water'     },
-    { id:'electric',  label:'Electric',  color:'electric'  },
-    { id:'gas',       label:'Gas',       color:'gas'       },
-    { id:'hazmat',    label:'Hazmat',    color:'hazmat'    }
-  ];
+ const SECTION_CONFIG = [
+  { id:'other',     label:'Other',     color:'other'     },
+  { id:'bldg',      label:'Building Construction', color:'bldg' },
+  { id:'staging',   label:'Apparatus Staging', color:'staging' }, // ← added
+  { id:'fire',      label:'Fire',      color:'fire'      },
+  { id:'elevators', label:'Elevators', color:'elevators' },
+  { id:'ems',       label:'EMS',       color:'ems'       },
+  { id:'water',     label:'Water',     color:'water'     },
+  { id:'electric',  label:'Electric',  color:'electric'  },
+  { id:'gas',       label:'Gas',       color:'gas'       },
+  { id:'hazmat',    label:'Hazmat',    color:'hazmat'    }
+];
+
 // ---- Optional per-section field order (top-to-bottom) ----
 const FIELD_ORDER = {
   staging: [
     'Ladder:', 'Engine:', 'Tanker:', 'Rescue:', 'Other Apparatus:'
   ],
-
   bldg: [
     'Occupancy:', 'Occupancy Notes:','Construction Type:', 
     'Construction Type Notes:', 'Number of Stories:',
@@ -95,10 +96,8 @@ const FIELD_ORDER = {
   ],
   other: [
     'Business Name:', 'Address:', 'Knox Box Location:', 'Closest Hydrant:', 'Contact Name (1):', 'Contact Number (1):', 'Contact Name (2):', 'Contact Number (2):'
-  ],
-    apparatus: [
-    'Ladder:',	'Engine:',	'Tanker:',	'Rescue:',	'Other Apparatus:'
   ]
+   
 };
 function _normKeyLabel(s){ return String(s||'').toLowerCase().replace(/:\s*$/,'').trim(); }
 function _orderFor(sectionId){
@@ -134,7 +133,12 @@ function _orderFor(sectionId){
   };
 
   const FIELD_PATTERNS = [
-            [/^Address:?$/i,'other'],
+    [/^Ladder:?$/i,'staging'],
+    [/^Engine:?$/i,'staging'],
+    [/^Tanker:?$/i,'staging'],
+    [/^Rescue:?$/i,'staging'],
+    [/^Other Apparatus:?$/i,'staging'],
+[/^Address:?$/i,'other'],
     [/^Closest Hydrant:?$/i,'other'],
     [/^Knox Box Location:?$/i,'other'],
 [ /^Number of Stories:?$/i,'bldg' ],
