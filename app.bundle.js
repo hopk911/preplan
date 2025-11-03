@@ -56,6 +56,10 @@ function buildImgWithFallback(srcOrId, cls, size){
   ];
 // ---- Optional per-section field order (top-to-bottom) ----
 const FIELD_ORDER = {
+  staging: [
+    'Ladder:', 'Engine:', 'Tanker:', 'Rescue:', 'Other Apparatus:'
+  ],
+
   bldg: [
     'Occupancy:', 'Occupancy Notes:','Construction Type:', 
     'Construction Type Notes:', 'Number of Stories:',
