@@ -55,6 +55,32 @@ function buildImgWithFallback(srcOrId, cls, size){
   { id:'hazmat',    label:'Hazmat',    color:'hazmat'    }
 ];
 
+;(()=>{
+  try{
+    const css = `
+/* Apparatus Staging (dark gray) */
+.chip[data-color="staging"]{background:#333!important;color:#fff!important;border:1px solid #222!important}
+.section[data-color="staging"] > h3{
+  background:#333!important;
+  color:#fff!important;
+  border-bottom:2px solid #222!important;
+}
+/* If you want the whole section body dark too, uncomment:
+.section[data-color="staging"]{ background:#2b2b2b!important; color:#fff!important }
+*/
+`;
+    if (!document.getElementById('staging-color-style')){
+      const s = document.createElement('style');
+      s.id = 'staging-color-style';
+      s.type = 'text/css';
+      s.appendChild(document.createTextNode(css));
+      document.head.appendChild(s);
+    }
+  }catch(e){}
+})();
+
+
+   
 // ---- Optional per-section field order (top-to-bottom) ----
 const FIELD_ORDER = {
   staging: [
