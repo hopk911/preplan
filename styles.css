@@ -1,6 +1,6 @@
 
 :root{--bg:#f7f8fb;--card:#fff;--text:#111;--muted:#6b7280;--line:#e5e7eb;--primary:#2563eb;
---c-fire:#ef4444;--c-ems:#10b981;--c-water:#3b82f6;--c-electric:#f59e0b;--c-gas:#fb923c;--c-hazmat:#8b5cf6;--c-elevators:#14b8a6;--c-other:#374151}
+--c-fire:#ef4444;--c-ems:#10b981;--c-water:#3b82f6;--c-electric:#f59e0b;--c-gas:#fb923c;--c-hazmat:#8b5cf6;--c-elevators:#14b8a6;--c-other:#374151;--c-bldg:#8B0000}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
 .app-header{padding:12px 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line)}
@@ -51,6 +51,8 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
 .section-nav .chip[data-color="gas"]{background:var(--c-gas)}
 .section-nav .chip[data-color="hazmat"]{background:var(--c-hazmat)}
 .section-nav .chip[data-color="elevators"]{background:var(--c-elevators)}
+.section-nav .chip[data-color="bldg"]{ background: var(--c-bldg); }
+
 
 /* section title bars - full color */
 .section[data-color] h3{margin:0 0 8px;padding:10px 12px;border:0;color:#fff;border-radius:8px}
@@ -62,6 +64,8 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
 .section[data-color="hazmat"] h3{background:var(--c-hazmat)}
 .section[data-color="elevators"] h3{background:var(--c-elevators)}
 .section[data-color="other"] h3{background:var(--c-other)}
+.section[data-color="bldg"] h3{ background: var(--c-bldg); }
+
 
 
 /* Hide only the photo inside the 'Other' row in the record modal */
