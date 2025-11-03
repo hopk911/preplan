@@ -44,6 +44,7 @@ function buildImgWithFallback(srcOrId, cls, size){
 // ---------- Sections & routing ----------
   const SECTION_CONFIG = [
     { id:'other',     label:'Other',     color:'other'     },
+    { id:'bldg',      label:'Building Construction', color:'bldg' },
     { id:'fire',      label:'Fire',      color:'fire'      },
     { id:'elevators', label:'Elevators', color:'elevators' },
     { id:'ems',       label:'EMS',       color:'ems'       },
@@ -71,7 +72,14 @@ function buildImgWithFallback(srcOrId, cls, size){
   };
 
   const FIELD_PATTERNS = [
-    [/^Remote Alarm Location:?$/i,'fire'],
+        [ /^Number of Stories:?$/i,'bldg' ],
+    [ /^Occupancy:?$/i,'bldg' ],
+    [ /^Occupancy Notes:?$/i,'bldg' ],
+    [ /^Construction Type:?$/i,'bldg' ],
+    [ /^Construction Type Notes:?$/i,'bldg' ],
+    [ /^Roof Type:?$/i,'bldg' ],
+    [ /^Basement:?$/i,'bldg' ],
+[/^Remote Alarm Location:?$/i,'fire'],
     [/^Sprinkler Main Shutoff Location:?$/i,'fire'],
     [/^Roof Type:?$/i,'other'],
     [/^Roof Access Location:?$/i,'other'],
