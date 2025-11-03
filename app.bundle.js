@@ -45,6 +45,7 @@ function buildImgWithFallback(srcOrId, cls, size){
   const SECTION_CONFIG = [
     { id:'other',     label:'Other',     color:'other'     },
     { id:'bldg',      label:'Building Construction', color:'bldg' },
+    { id:'apparatus', label:'Apparatus Staging', color:'apparatus' },
     { id:'fire',      label:'Fire',      color:'fire'      },
     { id:'elevators', label:'Elevators', color:'elevators' },
     { id:'ems',       label:'EMS',       color:'ems'       },
@@ -90,7 +91,7 @@ const FIELD_ORDER = {
     'Combustibles Location:', 'Flammables Location:', 'MSDS Location:', 'Hazmat Notes:'
   ],
   other: [
-    'Business Name:', 'Address:', '' , 'Knox Box Location:', 'Closest Hydrant:', '','Contact Name (1):', 'Contact Number (1):', '','Contact Name (2):', 'Contact Number (2):'
+    'Business Name:', 'Address:', 'Knox Box Location:', 'Closest Hydrant:', 'Contact Name (1):', 'Contact Number (1):', 'Contact Name (2):', 'Contact Number (2):'
   ]
 };
 function _normKeyLabel(s){ return String(s||'').toLowerCase().replace(/:\s*$/,'').trim(); }
