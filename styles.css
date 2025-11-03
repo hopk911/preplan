@@ -176,3 +176,7 @@ body.modal-open {
 }
 .modal-content .section-nav .chip { margin: 0 6px; }
 
+/* Popup photo top spacing */
+#recordModal .thumb-grid { padding-top: 12px; }
+#recordModal .thumb-grid img { margin-top: 6px; }
+
