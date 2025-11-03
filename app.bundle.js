@@ -99,7 +99,7 @@ function buildImgWithFallback(srcOrId, cls, size){
 [/^\s*Construction Type\s*:?\s*$/i,'bldg'],
 [/^\s*Construction Type Notes\s*:?\s*$/i,'bldg'],
 [/^\s*Roof Type\s*:?\s*$/i,'bldg'],
-[/^\s*Basement\s*:?\s*$/i,'bldg'],,
+[/^\s*Basement\s*:?\s*$/i,'bldg'],
 [/^Remote Alarm Location:?$/i,'fire'],
     [/^Sprinkler Main Shutoff Location:?$/i,'fire'],
     [/^Roof Type:?$/i,'other'],
