@@ -1,0 +1,375 @@
+/** 
+ * HFD Preplan Web App – Data + Uploads + Image Proxy (iOS-safe, back-compat)
+ *
+ * Endpoints:
+ *   GET  /exec?fn=rows[&callback=cb]                 -> table data (JSON or JSONP)
+ *        Back-compat aliases: fn=data, fn=table, or missing fn
+ *   POST /exec  fn=save  payload=<json>              -> upsert row by Stable ID
+ *   POST /exec  fn=saveField {stableId,field,value}  -> overwrite one cell by header+key
+ *   POST /exec  fn=upload ...                        -> photo upload
+ *           Accepts:
+ *             - JSON: {dataUrl|bytes+mime, filename?, field?}
+ *             - multipart/form-data: file part + folderId/field/name
+ *   POST /exec  fn=uploadB64 dataUrl=<dataurl> ...   -> alias to upload (for injector fallback)
+ *   GET  /exec?fn=img&id=<fileId>&w=800              -> drive image passthrough
+ *   GET  /exec?fn=ping                               -> health check
+ */
+
+/* ---------------------- CONFIG ---------------------- */
+
+var SPREADSHEET_ID = '14egNzmQZYcbeuXRRZIbvEMWOrGR4b_6Vy_rvnA0fEhY';
+var SHEET_NAME     = 'Form Responses';
+var KEY_COL_HEADER = 'Stable ID';
+
+// Default Drive folder used if a field doesn’t have a specific mapping
+var DEFAULT_PHOTO_FOLDER_ID = '1a-g1z9wQmo5wSr8oIidoLg2wLt4BTwxO';
+
+// Map exact column headers to Drive folder IDs
+var FOLDER_BY_FIELD = {
+  'Photo:'                    : '1a-g1z9wQmo5wSr8oIidoLg2wLt4BTwxO',
+  'Roof Access Photo:'        : '1tlRVFlcBoWSG7jhs9uScwO93yE2qLccw',
+  'Alarm Photo:'              : '1lAEJdYGwhPbAIUToHRnGvoz8X4hOJqOb',
+  'Elevator Shutoff Photo:'   : '1eUFsCFkjbpzSnoUf2DK_lyMQyt3vG8Q3',
+  'Gas Shutoff Photo:'        : '1grghRBy6VsryKhWephqeuJs_Uixq-sJE',
+  'Electrical Shutoff Photo:' : '1YlVxc0h6dj0wp5oCeV-0aB8sWGtO_vfm',
+  'Water Shutoff Photo:'      : '1zGqySR-Sks_YpDCj-C4lnhPM595TWivg',
+  'Sprinkler Shutoff Photo:'  : '1p7aFq3gviIN4Bh8S7iQm-eDS6HaDNmK_',
+  'Fire Pump Photo:'          : '1KKfbSQdha4NiKSQlNRTigUZPypE7RKNN',
+  'Tanks Photo:'              : '1p2kmKIzyB_8PKwM8sqhAK9W6P75f5bQS',
+  'Combustibles Photo:'       : '1-bvhTaL0en9zNsC8ZaLR6kdFWD5xw0ty',
+  'Hazmat Photo:'             : '1eq2NtwoCga_o8s-A6Tc_QagCB2G-e2pQ'
+};
+
+/* ---------------------- Router ---------------------- */
+
+function doGet(e) {
+  try {
+    var fn = (e && e.parameter && e.parameter.fn) ? String(e.parameter.fn).toLowerCase() : '';
+
+    if (!fn || fn === 'data' || fn === 'table' || fn === 'rows') {
+      return _jsonpOrJson_(e, listRows_());
+    }
+    if (fn === 'img')  return serveDriveImage_(e);
+    if (fn === 'ping') return _jsonpOrJson_(e, { ok: true, pong: true });
+
+    // Unknown GET → still give rows
+    return _jsonpOrJson_(e, listRows_());
+  } catch (err) {
+    return _jsonpOrJson_(e, _errPayload_(err, 500));
+  }
+}
+
+function doPost(e) {
+  try {
+    var ct = (e && e.postData && e.postData.type) ? String(e.postData.type) : '';
+
+    // JSON body (iOS / fetch with application/json)
+    if (ct.indexOf('application/json') !== -1) {
+      var body = {};
+      try { body = JSON.parse(e.postData.contents || '{}'); } catch (_) { body = {}; }
+      var jfn = (body.fn || '').toLowerCase();
+
+      if (jfn === 'upload')    return _json(handleUploadJSON_(body));
+      if (jfn === 'save')      return _json(handleSave_(body));           // JSON flavor
+      if (jfn === 'savefield') return _json(handleSaveFieldJSON_(body));  // NEW
+      if (jfn === 'uploadb64') return _json(handleUploadJSON_(body));     // alias
+
+      if (jfn) return _json(_errPayload_('Unknown fn', 400));
+      // fallthrough if JSON had no fn
+    }
+
+    // Multipart/form-data: look for files
+    if (/multipart\/form-data/i.test(ct) && e && e.files && Object.keys(e.files).length) {
+      return _json(handleUploadMultipart_(e));
+    }
+
+    // Legacy/url-encoded fallbacks
+    var fn = (e && e.parameter && e.parameter.fn) ? String(e.parameter.fn).toLowerCase() : '';
+
+    if (fn === 'upload')    return _json(handleUploadUrlEncoded_(e));
+    if (fn === 'uploadb64') return _json(handleUploadUrlEncoded_(e));   // alias
+    if (fn === 'save')      return _json(handleSave_(e.parameter));     // legacy path
+    if (fn === 'savefield') return _json(handleSaveFieldJSON_(e.parameter));
+
+    // If looks like upload but no fn
+    if (!fn && e && e.parameter && (e.parameter.dataUrl || e.parameter.bytes)) {
+      return _json(handleUploadUrlEncoded_(e));
+    }
+
+    return _json(_errPayload_('Unknown fn', 400));
+  } catch (err) {
+    return _json(_errPayload_(err, 500));
+  }
+}
+
+/* ---------------------- Data: rows + save ---------------------- */
+
+function listRows_() {
+  var sh = _sheet_();
+  var values = sh.getDataRange().getValues();
+  if (!values || values.length === 0) return { ok: true, headers: [], rows: [], data: [] };
+
+  var headers = (values[0] || []).map(function(h){ return String(h || '').trim(); });
+  var out = [];
+  for (var r = 1; r < values.length; r++) {
+    var row = values[r]; if (!row) continue;
+    var obj = {};
+    for (var c = 0; c < headers.length; c++) {
+      var h = headers[c]; if (!h) continue;
+      obj[h] = row[c] == null ? '' : row[c];
+    }
+    out.push(obj);
+  }
+  return { ok: true, headers: headers, rows: out, data: out };
+}
+
+// Save entire record (legacy & JSON)
+function handleSave_(src) {
+  var payload;
+  if (src && src.payload && typeof src.payload === 'string') {
+    try { payload = JSON.parse(src.payload); } catch (_) { payload = null; }
+  } else if (src && src.payload && typeof src.payload === 'object') {
+    payload = src.payload;
+  } else {
+    return _errPayload_('Missing or invalid payload', 400);
+  }
+
+  var sh = _sheet_();
+  var values = sh.getDataRange().getValues();
+  if (!values || values.length === 0) return _errPayload_('Sheet empty or headers missing', 500);
+
+  var headers = values[0].map(function(h){ return String(h || '').trim(); });
+  var keyIdx = headers.indexOf(KEY_COL_HEADER);
+  if (keyIdx < 0) return _errPayload_('Key column \"' + KEY_COL_HEADER + '\" not found', 400);
+
+  var keyVal = payload[KEY_COL_HEADER];
+  var targetRow = -1;
+
+  for (var r = 1; r < values.length; r++) {
+    if (String(values[r][keyIdx]) === String(keyVal)) { targetRow = r + 1; break; }
+  }
+  if (targetRow === -1) { targetRow = Math.max(2, sh.getLastRow() + 1); }
+
+  var outRow = new Array(headers.length);
+  for (var c = 0; c < headers.length; c++) {
+    var h = headers[c];
+    outRow[c] = payload.hasOwnProperty(h) ? payload[h] : '';
+  }
+
+  sh.getRange(targetRow, 1, 1, headers.length).setValues([outRow]);
+  return { ok: true, saved: true, row: targetRow, key: keyVal || null };
+}
+
+// Save one field (used by upload helpers)
+function handleSaveFieldJSON_(src) {
+  var stableId = (src && src.stableId) ? String(src.stableId) : '';
+  var field    = (src && src.field)    ? String(src.field)    : '';
+  var value    = (src && src.value)    ? String(src.value)    : '';
+  if (!stableId || !field) return _errPayload_('Missing stableId or field', 400);
+
+  var sh = _sheet_();
+  var values = sh.getDataRange().getValues();
+  if (!values || values.length === 0) return _errPayload_('Sheet empty', 500);
+
+  var headers = values[0].map(function(h){ return String(h || '').trim(); });
+  var keyIdx = headers.indexOf(KEY_COL_HEADER);
+  if (keyIdx < 0) return _errPayload_('Key column \"' + KEY_COL_HEADER + '\" not found', 400);
+
+  // Find/create row
+  var targetRow = -1;
+  for (var r = 1; r < values.length; r++) {
+    if (String(values[r][keyIdx]) === stableId) { targetRow = r + 1; break; }
+  }
+  if (targetRow === -1) targetRow = Math.max(2, sh.getLastRow() + 1);
+
+  // Ensure header exists
+  var colIdx = headers.indexOf(field);
+  if (colIdx < 0) {
+    headers.push(field);
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+    colIdx = headers.length - 1;
+  }
+
+  sh.getRange(targetRow, colIdx + 1).setValue(value);
+  return { ok: true, saved: true, row: targetRow, field: field };
+}
+
+/* ---------------------- Uploads (JSON, multipart, url-encoded) ---------------------- */
+
+// JSON body
+function handleUploadJSON_(body) {
+  var p = body || {};
+  var dataUrl  = p.dataUrl || '';
+  var bytesB64 = p.bytes   || '';
+  var mime     = p.mime    || '';
+  var field    = p.field   || '';
+  var filename = p.filename|| '';
+
+  var bin, detectedMime;
+  if (dataUrl && dataUrl.indexOf('base64,') !== -1) {
+    var parsed = parseDataUrl_(dataUrl);
+    bin = parsed.bytes; detectedMime = parsed.mime;
+    if (!filename) filename = suggestName_(detectedMime);
+  } else if (bytesB64) {
+    if (!mime) throw new Error('Missing mime for base64 bytes');
+    bin = Utilities.base64Decode(bytesB64); detectedMime = mime;
+    if (!filename) filename = suggestName_(detectedMime);
+  } else {
+    throw new Error('Missing dataUrl or bytes; iOS clients should send dataUrl.');
+  }
+
+  var destFolder = pickFolderForField_(field);
+  var blob = Utilities.newBlob(bin, detectedMime || 'application/octet-stream', filename);
+  var file = destFolder.createFile(blob);
+  try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(_){}
+  var viewUrl = 'https://drive.google.com/uc?export=view&id=' + file.getId();
+  return { ok:true, id:file.getId(), name:file.getName(), mime:file.getMimeType(), url:viewUrl, field:field || null, link:viewUrl };
+}
+
+// multipart/form-data (reads e.files)
+function handleUploadMultipart_(e) {
+  var p = e.parameter || {};
+  var field    = p.field    || '';
+  var folderId = p.folderId || '';
+  var name     = p.name     || p.filename || '';
+
+  var files = e.files || {};
+  var fileKey = Object.keys(files)[0]; // first file part
+  if (!fileKey) return _errPayload_('No file part found', 400);
+
+  var blob = files[fileKey]; // Blob
+  if (name) blob.setName(name);
+
+  var destFolder = folderId ? DriveApp.getFolderById(folderId) : pickFolderForField_(field);
+  var saved = destFolder.createFile(blob);
+  try { saved.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(_){}
+  var viewUrl = 'https://drive.google.com/uc?export=view&id=' + saved.getId();
+  return { ok:true, id:saved.getId(), name:saved.getName(), mime:saved.getMimeType(), url:viewUrl, field:field || null, link:viewUrl };
+}
+
+// url-encoded / legacy (dataUrl or bytes in e.parameter)
+function handleUploadUrlEncoded_(e) {
+  try {
+    var p = e && e.parameter ? e.parameter : {};
+    var dataUrl  = p.dataUrl || '';
+    var bytesB64 = p.bytes   || '';
+    var mime     = p.mime    || '';
+    var field    = p.field   || '';
+    var filename = p.filename|| '';
+
+    var bin, detectedMime;
+    if (dataUrl && dataUrl.indexOf('base64,') !== -1) {
+      var parsed = parseDataUrl_(dataUrl);
+      bin = parsed.bytes; detectedMime = parsed.mime;
+      if (!filename) filename = suggestName_(detectedMime);
+    } else if (bytesB64) {
+      if (!mime) throw new Error('Missing mime for base64 bytes');
+      bin = Utilities.base64Decode(bytesB64); detectedMime = mime;
+      if (!filename) filename = suggestName_(detectedMime);
+    } else {
+      throw new Error('Missing dataUrl or bytes; iOS clients should send dataUrl.');
+    }
+
+    var destFolder = pickFolderForField_(field);
+    var blob = Utilities.newBlob(bin, detectedMime || 'application/octet-stream', filename);
+    var file = destFolder.createFile(blob);
+    try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(_){}
+    var viewUrl = 'https://drive.google.com/uc?export=view&id=' + file.getId();
+
+    return { ok:true, id:file.getId(), name:file.getName(), mime:file.getMimeType(), url:viewUrl, field:field || null, link:viewUrl };
+  } catch (err) {
+    return _errPayload_('Upload Fail: ' + (err && err.message ? err.message : err), 400);
+  }
+}
+
+/* ---------------------- Image Proxy ---------------------- */
+
+function serveDriveImage_(e) {
+  var id = e && e.parameter ? e.parameter.id : '';
+  if (!id) return _jsonpOrJson_(e, _errPayload_('Missing id', 400));
+  var f = DriveApp.getFileById(id);
+  var b = f.getBlob();
+  return ContentService
+    .createBinaryOutput(b.getBytes())
+    .setMimeType(mimeToEnum_(b.getContentType()));
+}
+
+function mimeToEnum_(mime) {
+  if (/jpeg|jpg/i.test(mime)) return ContentService.MimeType.JPEG;
+  if (/png/i.test(mime))      return ContentService.MimeType.PNG;
+  if (/gif/i.test(mime))      return ContentService.MimeType.GIF;
+  return ContentService.MimeType.BINARY;
+}
+
+/* ---------------------- Helpers ---------------------- */
+
+function _sheet_(){
+  return SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+}
+
+function _jsonpOrJson_(e, obj){
+  try{
+    var cb = e && e.parameter && e.parameter.callback;
+    if (cb) {
+      return ContentService.createTextOutput(String(cb) + '(' + JSON.stringify(obj) + ')')
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+  }catch(_){}
+  return _json(obj);
+}
+
+function _json(obj){
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function _errPayload_(err, status){
+  var msg = (typeof err === 'string') ? err : (err && err.message ? err.message : String(err));
+  return { ok:false, status: status||500, error: msg };
+}
+
+// FAST parser: no regex → no timeouts on huge iPad photos
+// Robust, non-regex parser; no String.startsWith used
+function parseDataUrl_(s) {
+  // Coerce to string defensively (handles weird object/string cases)
+  s = '' + (s || '');
+
+  // Must begin with "data:"
+  if (s.lastIndexOf('data:', 0) !== 0) {  // equivalent of startsWith('data:')
+    throw new Error('Invalid dataUrl');
+  }
+
+  var comma = s.indexOf(',');
+  if (comma < 0) throw new Error('Invalid dataUrl');  // missing comma
+
+  // meta is like "image/jpeg;base64" (possibly more params)
+  var meta = s.substring(5, comma); // skip "data:"
+  var semi = meta.indexOf(';');
+
+  var mime = (semi >= 0) ? meta.substring(0, semi) : meta;
+  if (!mime) mime = 'application/octet-stream';
+
+  // Base64 payload after the comma
+  var b64 = s.substring(comma + 1);
+
+  // Decode (avoid any regex processing on huge strings)
+  var bytes = Utilities.base64Decode(b64);
+
+  return { mime: mime, bytes: bytes };
+}
+
+function pickFolderForField_(field) {
+  var id = FOLDER_BY_FIELD[field] || DEFAULT_PHOTO_FOLDER_ID;
+  if (!id) throw new Error('No destination folder configured');
+  return DriveApp.getFolderById(id);
+}
+
+function suggestName_(mime) {
+  var ext = 'bin';
+  if (/jpeg|jpg/i.test(mime)) ext = 'jpg';
+  else if (/png/i.test(mime)) ext = 'png';
+  else if (/gif/i.test(mime)) ext = 'gif';
+  else if (/heic/i.test(mime)) ext = 'heic';
+  var ts = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss');
+  return 'upload_' + ts + '.' + ext;
+}
