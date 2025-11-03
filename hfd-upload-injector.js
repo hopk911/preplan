@@ -1,5 +1,6 @@
-// hfd-upload-injector.js (JSON dataUrl upload – minimal patch)
-// Based on your original injector; only the upload path changed to always send {fn:"upload", dataUrl, filename, field}.
+// hfd-upload-injector.js (JSON dataUrl upload – minimal patch + immediate sheet write)
+// Based on your original injector; only the upload path changed to always send {fn:"upload", dataUrl, filename, field}
+// and we immediately persist the Drive link(s) to the Sheet via fn=savefield after a successful upload.
 // Place AFTER popup-edit.js. Requires window.WEBAPP_URL to point at your Apps Script Web App.
 
 (function(){
@@ -103,57 +104,53 @@
     } catch (e) {}
   })();
 
-  // === MINIMAL PATCH: always JSON-upload with dataUrl (iOS-safe) ===
- // drop-in replacement: NO custom headers → NO preflight
-async function uploadOneFileToDrive(file, fieldHeader){
-  if (!window.WEBAPP_URL) throw new Error('WEBAPP_URL is not set');
-// Derive a shareable link from the upload response
-const driveLink = out.link || out.url || (out.id ? ('https://drive.google.com/uc?export=view&id=' + out.id) : '');
+  // === Upload: ALWAYS send dataUrl via form-encoded POST (no preflight) ===
+  async function uploadOneFileToDrive(file, fieldHeader){
+    if (!window.WEBAPP_URL) throw new Error('WEBAPP_URL is not set');
 
-// Update the in-memory record so the UI reflects it right away
-window._currentRecord = window._currentRecord || {};
-window._currentRecord[header] = driveLink;
+    // read the file as a data URL (iOS/Safari-safe)
+    const dataUrl = await new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onerror = () => reject(new Error('reader failed'));
+      fr.onload  = () => resolve(fr.result);
+      fr.readAsDataURL(file);
+    });
 
-// Best-effort immediate persist to the Sheet
-try {
-  // Your key column must be exactly "Stable ID" or "Stable ID:"
-  const sid = (window._currentRecord['Stable ID'] || window._currentRecord['Stable ID:'] || '').toString().trim();
-  if (sid && driveLink) {
-    await writeLinkToSheet(sid, header, driveLink);
+    // send as a simple form post (no headers) to avoid CORS preflight
+    const form = new URLSearchParams();
+    form.set('fn', 'upload');
+    form.set('field', fieldHeader);     // exact sheet header, e.g., "Alarm Photo:"
+    form.set('filename', file.name || '');
+    form.set('dataUrl', dataUrl);       // "data:image/jpeg;base64,...."
+
+    const res = await fetch(window.WEBAPP_URL, { method: 'POST', body: form });
+    let json;
+    try { json = await res.json(); } catch (_) { throw new Error('Failed to fetch'); }
+    if (!res.ok || !json || json.ok === false) {
+      throw new Error(String((json && json.error) || ('HTTP ' + res.status)));
+    }
+    return json; // { ok:true, id, url|link }
   }
-} catch (e) {
-  console.warn('savefield failed (will still persist on full Save):', e);
-}
 
-  // read the file as a data URL (iOS/Safari-safe)
-  const dataUrl = await new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onerror = () => reject(new Error('reader failed'));
-    fr.onload  = () => resolve(fr.result);
-    fr.readAsDataURL(file);
-  });
+  // Write one cell to the Sheet without CORS preflight.
+  // Requires your Code.gs to handle fn=savefield (field must match header in the Sheet).
+  async function writeLinkToSheet(stableId, header, driveLink) {
+    if (!window.WEBAPP_URL) throw new Error('WEBAPP_URL is not set');
+    if (!stableId || !header || !driveLink) return;
 
-  // send as a simple form post (no headers) to avoid CORS preflight
-  const form = new URLSearchParams();
-  form.set('fn', 'upload');
-  form.set('field', fieldHeader);     // exact sheet header, e.g., "Alarm Photo:"
-  form.set('filename', file.name || '');
-  form.set('dataUrl', dataUrl);       // "data:image/jpeg;base64,...."
+    const form = new URLSearchParams();
+    form.set('fn', 'savefield');
+    form.set('stableId', String(stableId));
+    form.set('field', header);        // MUST match the Sheet header exactly (e.g., "Alarm Photo:")
+    form.set('value', driveLink);
 
-  const res = await fetch(window.WEBAPP_URL, {
-    method: 'POST',
-    body: form   // <-- no headers on purpose
-  });
-
-  // If the browser blocked the request, res.ok may be false or JSON parse may throw
-  let json;
-  try { json = await res.json(); } catch (_) { throw new Error('Failed to fetch'); }
-  if (!res.ok || !json || json.ok === false) {
-    throw new Error(String((json && json.error) || ('HTTP ' + res.status)));
+    const res = await fetch(window.WEBAPP_URL, { method: 'POST', body: form });
+    let j = {};
+    try { j = await res.json(); } catch (_) {}
+    if (!res.ok || j.ok === false) {
+      throw new Error((j && j.error) || ('HTTP ' + res.status));
+    }
   }
-  return json; // { ok:true, id, url/link, ... }
-}
-
 
   function ensureSectionHeaderControls(sectionEl){
     if (!sectionEl) return null;
@@ -203,7 +200,7 @@ try {
         const links = [];
         try{
           for (const f of inp.files){
-			const out = await uploadOneFileToDrive(f, header);
+            const out = await uploadOneFileToDrive(f, header);
             const link = out.link || out.url || (out.id ? ('https://drive.google.com/uc?export=view&id=' + out.id) : '');
             if (link) links.push(link);
           }
@@ -219,30 +216,16 @@ try {
           const csv = [base, links.join(', ')].filter(Boolean).join(', ');
           if (window._currentRecord) window._currentRecord[header] = csv;
           appendPreviews(header, links);
+
+          // Immediately write to the sheet as well (best effort)
+          const sid = (window._currentRecord['Stable ID'] || window._currentRecord['Stable ID:'] || '').toString().trim();
+          if (sid && csv){
+            try { await writeLinkToSheet(sid, header, csv); } catch(e){ console.warn('savefield failed', e); }
+          }
         }catch(e){}
       });
     });
   }
-  
-// Write one cell to the Sheet without CORS preflight.
-// Requires your Code.gs to handle fn=savefield (field must match header in the Sheet).
-async function writeLinkToSheet(stableId, header, driveLink) {
-  if (!window.WEBAPP_URL) throw new Error('WEBAPP_URL is not set');
-  if (!stableId || !header || !driveLink) return;
-
-  const form = new URLSearchParams();
-  form.set('fn', 'savefield');
-  form.set('stableId', String(stableId));
-  form.set('field', header);        // MUST match the Sheet header exactly (e.g., "Alarm Photo:")
-  form.set('value', driveLink);
-
-  const res = await fetch(window.WEBAPP_URL, { method: 'POST', body: form });
-  let j = {};
-  try { j = await res.json(); } catch (_) {}
-  if (!res.ok || j.ok === false) {
-    throw new Error((j && j.error) || ('HTTP ' + res.status));
-  }
-}
 
   // Re-mount buttons whenever the modal switches to edit mode
   if (modal){
