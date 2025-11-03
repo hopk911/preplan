@@ -60,8 +60,38 @@ const FIELD_ORDER = {
     'Construction Type:', 'Construction Type Notes:',
     'Roof Type:', 'Basement:'
   ],
-  other: ['Address:', 'Knox Box Location:', 'Closest Hydrant:'],
-  fire:  ['FDC:', 'Remote Alarm Location:', 'Sprinkler Main Shutoff Location:']
+  fire: [
+    'FDC:', 'Remote Alarm Location:', 'Sprinkler Main Shutoff Location:',
+    'Fire Pump Location:', 'Alarm Panel Location:', 'Pull Station Location:',
+    'Extinguisher Location:', 'Ladder Access:', 'Stair Location:', 'Roof Access Location:'
+  ],
+  elevators: [
+    'Elevator Type:', 'Elevator Shutoff Location:', 'Elevator Room Location:',
+    'Elevator Key Location:', 'Elevator Bank:', 'Elevator Notes:'
+  ],
+  ems: [
+    'AED Location:', 'Narcan Location:', 'Medical Kit Location:', 'First Aid Location:',
+    'EMS Notes:'
+  ],
+  water: [
+    'Closest Hydrant:', 'Cistern Location:', 'Sprinkler Main Shutoff Location:',
+    'Water Shutoff:', 'Water Meter Location:', 'Water Notes:'
+  ],
+  electric: [
+    'Electric Panel Location:', 'Main Breaker Location:', 'Generator Location:',
+    'Electrical Shutoff Location:', 'Electric Notes:'
+  ],
+  gas: [
+    'Gas Meter Location:', 'Propane Shutoff Location:', 'Gas Shutoff Location:',
+    'Gas Notes:'
+  ],
+  hazmat: [
+    'Haz-Mat:', 'Chemical Storage Location:', 'Tank Location:',
+    'Combustibles Location:', 'Flammables Location:', 'MSDS Location:', 'Hazmat Notes:'
+  ],
+  other: [
+    'Address:', 'Knox Box Location:', 'Closest Hydrant:'
+  ]
 };
 function _normKeyLabel(s){ return String(s||'').toLowerCase().replace(/:\s*$/,'').trim(); }
 function _orderFor(sectionId){
