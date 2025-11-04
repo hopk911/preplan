@@ -44,6 +44,26 @@ function buildSelect(options, currentValue){
 
   const modal   = document.getElementById('recordModal');
   const content = document.getElementById('modalContent');
+
+  // === Wait overlay helpers (Save/Upload) ===
+  function ensureWaitHost(){
+    let host = modal.querySelector('.upload-wait');
+    if (!host){
+      host = document.createElement('div');
+      host.className = 'upload-wait';
+      host.innerHTML = '<div class="box"><div class="spinner"></div><div class="msg">Working…</div></div>';
+      modal.appendChild(host);
+    }
+    return host;
+  }
+  function showWait(msg){
+    const host = ensureWaitHost();
+    const label = host.querySelector('.msg');
+    if (label) label.textContent = msg || 'Working…';
+    host.style.display = 'flex';
+    return ()=>{ host.style.display = 'none'; };
+  }
+
   const btn     = document.getElementById('btnModalEdit');
   const closeBtn = document.getElementById('btnCloseModal');
   if (!modal || !content || !btn) { console.warn('[popup-edit.js] missing DOM'); return; }
@@ -231,7 +251,8 @@ function ensureSID(){
     payload[SID_HEADER] = sid;
     payload[SID_LABEL]  = sid;
 
-    btn.disabled = true;
+    
+    const hideWait = showWait('Saving changes…');btn.disabled = true;
     try{
       await saveViaPost(payload);
       clearEditToken();
@@ -243,6 +264,7 @@ function ensureSID(){
       alert('Save failed: ' + (e.message || e));
       setEditable(true);
     }finally{
+      try{ hideWait(); }catch(_){ }
       btn.disabled = false;
     }
   });
