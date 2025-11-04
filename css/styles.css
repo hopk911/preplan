@@ -356,3 +356,32 @@ body.modal-open {
   background: #fff;
   font: inherit;
 }
+
+/* === Upload wait overlay (blocks clicks during photo upload) === */
+#recordModal .upload-wait{
+  position: fixed;
+  inset: 0;
+  z-index: 1100;               /* above the modal content */
+  background: rgba(255,255,255,.82);
+  display: none;               /* toggled by JS */
+  align-items: center;
+  justify-content: center;
+}
+#recordModal .upload-wait .box{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+}
+#recordModal .upload-wait .spinner{
+  width: 18px; height: 18px;
+  border: 3px solid #cfcfcf;
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: hfd-spin 0.9s linear infinite;
+}
+@keyframes hfd-spin { to { transform: rotate(360deg); } }

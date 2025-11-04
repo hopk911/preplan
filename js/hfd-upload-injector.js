@@ -10,7 +10,28 @@
   const SID_HEADER = 'Stable ID';
   const SID_LABEL  = 'Stable ID:';
 
-  function editToken(){ try{ return sessionStorage.getItem('HFD_EDIT_TOKEN') || ''; }catch(_){ return ''; } }
+  
+
+  // === Upload wait overlay helpers ===
+  function ensureWaitHost(){
+    // place once inside the dialog so it covers the popup
+    let host = modal.querySelector('.upload-wait');
+    if (!host){
+      host = document.createElement('div');
+      host.className = 'upload-wait';
+      host.innerHTML = '<div class="box"><div class="spinner"></div><div class="msg">Uploading photo…</div></div>';
+      modal.appendChild(host);
+    }
+    return host;
+  }
+  function showWait(msg){
+    const host = ensureWaitHost();
+    const label = host.querySelector('.msg');
+    if (label) label.textContent = msg || 'Uploading photo…';
+    host.style.display = 'flex';
+    return ()=>{ host.style.display = 'none'; };
+  }
+function editToken(){ try{ return sessionStorage.getItem('HFD_EDIT_TOKEN') || ''; }catch(_){ return ''; } }
   function getSID(){
     const r = window._currentRecord || {};
     const sid = r[SID_HEADER] || r[SID_LABEL];
@@ -154,6 +175,8 @@
         btn.disabled = true;
         btn.textContent = 'Uploading…';
 
+        const hideWait = showWait('Uploading photo…');
+
         enqueue(async ()=>{
           const links = [];
           try{
@@ -168,6 +191,7 @@
           }catch(e){
             console.error(e);
             alert('Upload failed: ' + e.message);
+            try{ hideWait(); }catch(_){}
           }finally{
             btn.disabled = false;
             btn.textContent = prev;
@@ -180,6 +204,7 @@
           if (window._currentRecord) window._currentRecord[header] = csv;
           const fieldName = /:$/.test(header) ? header : (header + ':');
           await postForm({ fn: 'savefield', stableId: getSID(), field: fieldName, value: csv });
+            hideWait();
         });
       });
     });
