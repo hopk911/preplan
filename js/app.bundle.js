@@ -186,6 +186,7 @@ function _orderFor(sectionId){
     [ /^Roof Type:?$/i,'bldg' ],
     [ /^Basement:?$/i,'bldg' ],
 [/^Remote Alarm Location:?$/i,'fire'],
+    [/(^| )(sprinkler|sprinkler\s*main|sprinkler\s*shutoff)/i,'fire'],
     [/^Sprinkler Main Shutoff Location:?$/i,'fire'],
     [/^Roof Type:?$/i,'other'],
     [/^Roof Access Location:?$/i,'other'],
@@ -193,7 +194,7 @@ function _orderFor(sectionId){
     [/^(fdc|standpipe|riser|fire pump|alarm|pull|extinguisher|ladder|stair|roof|pre plan|knox)/i,'fire'],
     [/(^| )(elevators?|lift|elevator bank|elevator key|elevator room|elev\b)/i,'elevators'],
     [/(^| )(ems|aed|narcan|medical)/i,'ems'],
-    [/(^| )(water|hydrant|sprinkler|shutoff.*water)/i,'water'],
+    [/(^| )(water|hydrant|shutoff.*water)/i,'water'],
     [/(^| )(electric|electrical|panel|generator|shutoff.*electric)/i,'electric'],
     [/(^| )(gas|meter|propane|shutoff.*gas)/i,'gas'],
     [/(^| )(haz|msds|chemical|tank|combustible|flammable)/i,'hazmat'],
@@ -302,6 +303,58 @@ function _orderFor(sectionId){
   const btnAdd    = $('btnAdd'), searchInput = $('searchInput');
   const modal=$('recordModal'),modalTitle=$('modalTitle'),modalContent=$('modalContent'),sectionNav=$('sectionNav');
   const btnCloseModal=$('btnCloseModal'),backdrop=$('modalBackdrop');
+  // --- Delete-on-X for photo tiles (delegated) ---
+  (function(){
+    try{
+      if (!modalContent) return;
+      modalContent.addEventListener('click', async function(ev){
+        const del = ev.target && ev.target.closest && ev.target.closest('.photo-tile .del');
+        if (!del) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        // Require edit token
+        let token = ''; try { token = sessionStorage.getItem('HFD_EDIT_TOKEN') || ''; } catch(_) {}
+        if (!token){ alert('Click Edit first to enable deleting photos.'); return; }
+        // Resolve elements + data
+        const tile = del.closest('.photo-tile');
+        if (!tile) return;
+        const urlEnc = tile.getAttribute('data-photo-url') || '';
+        const fieldRaw = tile.getAttribute('data-photo-field') || '';
+        const url = decodeURIComponent(urlEnc);
+        const field = fieldRaw; // already raw header text
+        // Stable ID from current record
+        const rec = (window._currentRecord && typeof window._currentRecord==='object') ? window._currentRecord : {};
+        const sid = String(rec['Stable ID'] || rec['Stable ID:'] || '').trim();
+        if (!sid){ alert('Stable ID is missing; click Edit to initialize.'); return; }
+        // Confirm
+        if (!confirm('Delete this photo from "' + (field || 'Photo') + '"?')) return;
+        // Call server
+        let ok = false, err = '';
+        try{
+          const form = new URLSearchParams();
+          form.set('fn', 'saveField');
+          form.set('stableId', sid);
+          form.set('field', field);
+          form.set('value', '');
+          form.set('token', token);
+          const res = await fetch((window.WEBAPP_URL||''), { method:'POST', body: form });
+          const j = await res.json().catch(()=>({ok:false,error:'bad json'}));
+          ok = !!(res.ok && j && j.ok !== false);
+          if (!ok) err = j && j.error ? String(j.error) : ('HTTP ' + res.status);
+        }catch(e){ err = String(e&&e.message||e||'error'); ok=false; }
+        if (!ok){ alert('Delete failed: ' + err); return; }
+        // Update local record (for single-photo fields we clear it)
+        try{
+          if (window._currentRecord){
+            window._currentRecord[field] = '';
+          }
+        }catch(_){}
+        // Remove tile
+        tile.parentNode && tile.parentNode.removeChild(tile);
+      }, false);
+    }catch(_){}
+  })();
+
 
   // ---------- State ----------
   const PAGE_SIZE=10; let page=0,rows=[],headers=[],selectedIndex=-1;
@@ -357,11 +410,15 @@ function renderPhotosBlock(items){
   const tiles = items.map(it => {
     const img = buildImgWithFallback(it.url, '', 300);
     const h   = it.header || '';
+    const sec = it.sectionId || '';
+    let title = h.replace(/Photo:?$/i, '').trim() || 'Photo';
+    if (/^Photo:?$/i.test(h) && sec === 'other') { title = 'Business Photo'; }
     return `
       <div class="photo-tile"
            data-photo-url="${encodeURIComponent(it.url)}"
-           data-photo-field="${String(h).replace(/\"/g,'&quot;')}">
+           data-photo-field="${String(h).replace(/"/g,'&quot;')}">
         ${img}
+        <div class="photo-title">${title}</div>
         <span class="del" title="Delete">×</span>
       </div>`;
   }).join('');
@@ -404,7 +461,7 @@ function renderPhotosBlock(items){
       const sec=sectionForField(h);
       if(/photo/i.test(String(h))){
         const urls=String(rec[h]||'').split(/[\,\r\n]+|\s{2,}|,\s*/).filter(Boolean);
-        for(const u of urls) buckets[sec].photos.push({url:u,sectionId:sec});
+        for(const u of urls) buckets[sec].photos.push({url:u, sectionId:sec, header:h});
       } else {
         const val=String(rec[h]??''); buckets[sec].kv.push({h:h, html: renderKV(h,val)});
       }

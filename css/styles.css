@@ -329,3 +329,20 @@ body.modal-open {
   line-height: 1;
 }
 .photo-tile { position: relative; }
+
+
+/* ===== Photo title captions beneath images ===== */
+.photo-tile {
+  text-align: center;
+  position: relative;
+}
+.photo-tile img {
+  display: block;
+  margin: 0 auto 4px auto;
+}
+.photo-title {
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+  margin-top: 4px;
+}

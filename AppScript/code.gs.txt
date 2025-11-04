@@ -4,13 +4,14 @@
  * Endpoints:
  *   GET  /exec?fn=rows[&callback=cb]                 -> table data (JSON or JSONP)
  *        Back-compat aliases: fn=data, fn=table, or missing fn
- *   POST /exec  fn=save  payload=<json>              -> upsert row by Stable ID
- *   POST /exec  fn=saveField {stableId,field,value}  -> overwrite one cell by header+key
- *   POST /exec  fn=upload ...                        -> photo upload
+ *   POST /exec  fn=save  payload=<json>              -> upsert row by Stable ID (token required)
+ *   POST /exec  fn=saveField {stableId,field,value}  -> overwrite one cell (token required)
+ *   POST /exec  fn=upload ...                        -> photo upload (token required)
  *           Accepts:
  *             - JSON: {dataUrl|bytes+mime, filename?, field?}
  *             - multipart/form-data: file part + folderId/field/name
  *   POST /exec  fn=uploadB64 dataUrl=<dataurl> ...   -> alias to upload (for injector fallback)
+ *   POST /exec  fn=authedit pw=<password>            -> returns edit token if password valid
  *   GET  /exec?fn=img&id=<fileId>&w=800              -> drive image passthrough
  *   GET  /exec?fn=ping                               -> health check
  */
@@ -40,6 +41,32 @@ var FOLDER_BY_FIELD = {
   'Hazmat Photo:'             : '1eq2NtwoCga_o8s-A6Tc_QagCB2G-e2pQ'
 };
 
+/* ---------------------- Edit Auth (server-side) ---------------------- */
+// Set these two:
+var EDIT_SALT = 'HFD-Auth-2025';
+var EDIT_PASSWORD_SHA256_HEX = 'ca75e2ab7bb5afcfff1e5709c8d17be2ac7fdc116adf92aa353274e75925d3a4';
+var EDIT_TOKEN_TTL_SECS = 1800; // 30 minutes
+
+function sha256Hex_(s) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, s, Utilities.Charset.UTF_8);
+  return bytes.map(function(b){ b = (b<0? b+256:b); var h=b.toString(16); return h.length===1?'0'+h:h; }).join('');
+}
+function authIssueToken_(pw) {
+  if (!pw) return null;
+  var hex = sha256Hex_(String(EDIT_SALT) + String(pw));
+  if (hex !== EDIT_PASSWORD_SHA256_HEX) return null;
+  var token = Utilities.getUuid();
+  CacheService.getScriptCache().put('edit:'+token, '1', EDIT_TOKEN_TTL_SECS);
+  return token;
+}
+function authCheckToken_(token) {
+  if (!token) return false;
+  return CacheService.getScriptCache().get('edit:'+token) === '1';
+}
+function requireAuthOrThrow_(token) {
+  if (!authCheckToken_(token)) throw new Error('Unauthorized (edit token required)');
+}
+
 /* ---------------------- Router ---------------------- */
 
 function doGet(e) {
@@ -51,6 +78,13 @@ function doGet(e) {
     }
     if (fn === 'img')  return serveDriveImage_(e);
     if (fn === 'ping') return _jsonpOrJson_(e, { ok: true, pong: true });
+    if (fn === 'deletephoto') return _jsonpOrJson_(e, handleDeletePhoto_(e.parameter));
+
+    if (fn === 'authedit') {
+      // NOTE: JSONP for cross-origin; safe enough (token only). Do NOT log the pw.
+    var pw = e && e.parameter ? e.parameter.pw : '';
+      return _jsonpOrJson_(e, { ok: true, token: authIssueToken_(pw) || null });
+}
 
     // Unknown GET → still give rows
     return _jsonpOrJson_(e, listRows_());
@@ -71,8 +105,10 @@ function doPost(e) {
 
       if (jfn === 'upload')    return _json(handleUploadJSON_(body));
       if (jfn === 'save')      return _json(handleSave_(body));           // JSON flavor
-      if (jfn === 'savefield') return _json(handleSaveFieldJSON_(body));  // NEW
+      if (jfn === 'savefield') return _json(handleSaveFieldJSON_(body));  // JSON flavor
       if (jfn === 'uploadb64') return _json(handleUploadJSON_(body));     // alias
+      if (jfn === 'authedit')  return _json({ ok:true, token: authIssueToken_(body.pw) || null });
+      if (jfn === 'deletephoto') return _json(handleDeletePhoto_(body));
 
       if (jfn) return _json(_errPayload_('Unknown fn', 400));
       // fallthrough if JSON had no fn
@@ -124,7 +160,6 @@ function listRows_() {
 }
 
 /* ======== RACE-SAFE upsert: takes lock; writes key first if row is new ======== */
-// Save entire record (legacy & JSON)
 function handleSave_(src) {
   var payload;
   if (src && src.payload && typeof src.payload === 'string') {
@@ -134,6 +169,9 @@ function handleSave_(src) {
   } else {
     return _errPayload_('Missing or invalid payload', 400);
   }
+
+  // Require edit token
+  requireAuthOrThrow_( (src && src.token) || (src && src.parameter && src.parameter.token) );
 
   var lock = LockService.getDocumentLock();
   lock.waitLock(20000); // up to 20s
@@ -161,7 +199,7 @@ function handleSave_(src) {
       targetRow = Math.max(2, sh.getLastRow() + 1);
       sh.getRange(targetRow, keyIdx + 1).setValue(keyVal);
       SpreadsheetApp.flush(); // make key visible to other in-flight requests
-      // Reload headers snapshot (safe if columns mutated elsewhere)
+      // refresh snapshot
       values = sh.getDataRange().getValues();
       headers = values[0].map(function(h){ return String(h || '').trim(); });
     }
@@ -188,8 +226,10 @@ function handleSave_(src) {
 }
 
 /* ======== RACE-SAFE saveField: takes lock; writes key first if row is new ======== */
-// Save one field (used by upload helpers)
 function handleSaveFieldJSON_(src) {
+  // Require edit token
+  requireAuthOrThrow_( (src && src.token) || (src && src.parameter && src.parameter.token) );
+
   var stableId = (src && src.stableId) ? String(src.stableId) : '';
   var field    = (src && src.field)    ? String(src.field)    : '';
   var value    = (src && src.value)    ? String(src.value)    : '';
@@ -217,7 +257,7 @@ function handleSaveFieldJSON_(src) {
       // Write the key first so concurrent uploads will find this row
       sh.getRange(targetRow, keyIdx + 1).setValue(stableId);
       SpreadsheetApp.flush();
-      // refresh header snapshot (in case of mutations elsewhere)
+      // refresh header snapshot
       values = sh.getDataRange().getValues();
       headers = values[0].map(function(h){ return String(h || '').trim(); });
     }
@@ -240,8 +280,10 @@ function handleSaveFieldJSON_(src) {
 
 /* ---------------------- Uploads (JSON, multipart, url-encoded) ---------------------- */
 
-// JSON body
 function handleUploadJSON_(body) {
+  // Require edit token
+  requireAuthOrThrow_( body && body.token );
+
   var p = body || {};
   var dataUrl  = p.dataUrl || '';
   var bytesB64 = p.bytes   || '';
@@ -270,8 +312,10 @@ function handleUploadJSON_(body) {
   return { ok:true, id:file.getId(), name:file.getName(), mime:file.getMimeType(), url:viewUrl, field:field || null, link:viewUrl };
 }
 
-// multipart/form-data (reads e.files)
 function handleUploadMultipart_(e) {
+  // Require edit token
+  requireAuthOrThrow_( e && e.parameter && e.parameter.token );
+
   var p = e.parameter || {};
   var field    = p.field    || '';
   var folderId = p.folderId || '';
@@ -291,8 +335,10 @@ function handleUploadMultipart_(e) {
   return { ok:true, id:saved.getId(), name:saved.getName(), mime:saved.getMimeType(), url:viewUrl, field:field || null, link:viewUrl };
 }
 
-// url-encoded / legacy (dataUrl or bytes in e.parameter)
 function handleUploadUrlEncoded_(e) {
+  // Require edit token
+  requireAuthOrThrow_( e && e.parameter && e.parameter.token );
+
   try {
     var p = e && e.parameter ? e.parameter : {};
     var dataUrl  = p.dataUrl || '';
@@ -373,32 +419,17 @@ function _errPayload_(err, status){
 }
 
 // FAST parser: no regex → no timeouts on huge iPad photos
-// Robust, non-regex parser; no String.startsWith used
 function parseDataUrl_(s) {
-  // Coerce to string defensively (handles weird object/string cases)
   s = '' + (s || '');
-
-  // Must begin with "data:"
-  if (s.lastIndexOf('data:', 0) !== 0) {  // equivalent of startsWith('data:')
-    throw new Error('Invalid dataUrl');
-  }
-
+  if (s.lastIndexOf('data:', 0) !== 0) { throw new Error('Invalid dataUrl'); } // must start with data:
   var comma = s.indexOf(',');
-  if (comma < 0) throw new Error('Invalid dataUrl');  // missing comma
-
-  // meta is like "image/jpeg;base64" (possibly more params)
+  if (comma < 0) throw new Error('Invalid dataUrl');
   var meta = s.substring(5, comma); // skip "data:"
   var semi = meta.indexOf(';');
-
   var mime = (semi >= 0) ? meta.substring(0, semi) : meta;
   if (!mime) mime = 'application/octet-stream';
-
-  // Base64 payload after the comma
   var b64 = s.substring(comma + 1);
-
-  // Decode (avoid any regex processing on huge strings)
   var bytes = Utilities.base64Decode(b64);
-
   return { mime: mime, bytes: bytes };
 }
 

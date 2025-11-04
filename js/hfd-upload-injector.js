@@ -136,7 +136,7 @@
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
-      input.multiple = true;
+      input.multiple = false;
       input.style.display = 'none';
 
       const wrap = document.createElement('span');
@@ -176,8 +176,7 @@
 
           if (!links.length) return;
           const rec  = window._currentRecord || {};
-          const base = (rec && rec[header]) ? String(rec[header]).trim() : '';
-          const csv  = [base, links.join(', ')].filter(Boolean).join(', ');
+          const csv  = (links && links.length) ? links[0] : '';
           if (window._currentRecord) window._currentRecord[header] = csv;
           const fieldName = /:$/.test(header) ? header : (header + ':');
           await postForm({ fn: 'savefield', stableId: getSID(), field: fieldName, value: csv });
