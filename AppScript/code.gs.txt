@@ -123,6 +123,7 @@ function listRows_() {
   return { ok: true, headers: headers, rows: out, data: out };
 }
 
+/* ======== RACE-SAFE upsert: takes lock; writes key first if row is new ======== */
 // Save entire record (legacy & JSON)
 function handleSave_(src) {
   var payload;
@@ -134,32 +135,59 @@ function handleSave_(src) {
     return _errPayload_('Missing or invalid payload', 400);
   }
 
-  var sh = _sheet_();
-  var values = sh.getDataRange().getValues();
-  if (!values || values.length === 0) return _errPayload_('Sheet empty or headers missing', 500);
+  var lock = LockService.getDocumentLock();
+  lock.waitLock(20000); // up to 20s
 
-  var headers = values[0].map(function(h){ return String(h || '').trim(); });
-  var keyIdx = headers.indexOf(KEY_COL_HEADER);
-  if (keyIdx < 0) return _errPayload_('Key column \"' + KEY_COL_HEADER + '\" not found', 400);
+  try {
+    var sh = _sheet_();
+    var values = sh.getDataRange().getValues();
+    if (!values || values.length === 0) return _errPayload_('Sheet empty or headers missing', 500);
 
-  var keyVal = payload[KEY_COL_HEADER];
-  var targetRow = -1;
+    var headers = values[0].map(function(h){ return String(h || '').trim(); });
+    var keyIdx = headers.indexOf(KEY_COL_HEADER);
+    if (keyIdx < 0) return _errPayload_('Key column "' + KEY_COL_HEADER + '" not found', 400);
 
-  for (var r = 1; r < values.length; r++) {
-    if (String(values[r][keyIdx]) === String(keyVal)) { targetRow = r + 1; break; }
+    var keyVal = String(payload[KEY_COL_HEADER] || payload[KEY_COL_HEADER + ':'] || '').trim();
+    if (!keyVal) return _errPayload_('Missing Stable ID', 400);
+
+    // Find row by Stable ID
+    var targetRow = -1;
+    for (var r = 1; r < values.length; r++) {
+      if (String(values[r][keyIdx]) === keyVal) { targetRow = r + 1; break; }
+    }
+
+    // If not found, allocate row and WRITE KEY FIRST so concurrent requests find it
+    if (targetRow === -1) {
+      targetRow = Math.max(2, sh.getLastRow() + 1);
+      sh.getRange(targetRow, keyIdx + 1).setValue(keyVal);
+      SpreadsheetApp.flush(); // make key visible to other in-flight requests
+      // Reload headers snapshot (safe if columns mutated elsewhere)
+      values = sh.getDataRange().getValues();
+      headers = values[0].map(function(h){ return String(h || '').trim(); });
+    }
+
+    // Ensure all payload headers exist
+    var changed = false;
+    Object.keys(payload).forEach(function(h){
+      if (headers.indexOf(h) < 0) { headers.push(h); changed = true; }
+    });
+    if (changed) sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+    // Build row in header order
+    var outRow = new Array(headers.length);
+    for (var c = 0; c < headers.length; c++) {
+      var h = headers[c];
+      outRow[c] = payload.hasOwnProperty(h) ? payload[h] : '';
+    }
+
+    sh.getRange(targetRow, 1, 1, headers.length).setValues([outRow]);
+    return { ok: true, saved: true, row: targetRow, key: keyVal };
+  } finally {
+    try { lock.releaseLock(); } catch (_){}
   }
-  if (targetRow === -1) { targetRow = Math.max(2, sh.getLastRow() + 1); }
-
-  var outRow = new Array(headers.length);
-  for (var c = 0; c < headers.length; c++) {
-    var h = headers[c];
-    outRow[c] = payload.hasOwnProperty(h) ? payload[h] : '';
-  }
-
-  sh.getRange(targetRow, 1, 1, headers.length).setValues([outRow]);
-  return { ok: true, saved: true, row: targetRow, key: keyVal || null };
 }
 
+/* ======== RACE-SAFE saveField: takes lock; writes key first if row is new ======== */
 // Save one field (used by upload helpers)
 function handleSaveFieldJSON_(src) {
   var stableId = (src && src.stableId) ? String(src.stableId) : '';
@@ -167,31 +195,47 @@ function handleSaveFieldJSON_(src) {
   var value    = (src && src.value)    ? String(src.value)    : '';
   if (!stableId || !field) return _errPayload_('Missing stableId or field', 400);
 
-  var sh = _sheet_();
-  var values = sh.getDataRange().getValues();
-  if (!values || values.length === 0) return _errPayload_('Sheet empty', 500);
+  var lock = LockService.getDocumentLock();
+  lock.waitLock(20000); // up to 20s
 
-  var headers = values[0].map(function(h){ return String(h || '').trim(); });
-  var keyIdx = headers.indexOf(KEY_COL_HEADER);
-  if (keyIdx < 0) return _errPayload_('Key column \"' + KEY_COL_HEADER + '\" not found', 400);
+  try {
+    var sh = _sheet_();
+    var values = sh.getDataRange().getValues();
+    if (!values || values.length === 0) return _errPayload_('Sheet empty', 500);
 
-  // Find/create row
-  var targetRow = -1;
-  for (var r = 1; r < values.length; r++) {
-    if (String(values[r][keyIdx]) === stableId) { targetRow = r + 1; break; }
+    var headers = values[0].map(function(h){ return String(h || '').trim(); });
+    var keyIdx = headers.indexOf(KEY_COL_HEADER);
+    if (keyIdx < 0) return _errPayload_('Key column "' + KEY_COL_HEADER + '" not found', 400);
+
+    // Find/create row (keyed by Stable ID)
+    var targetRow = -1;
+    for (var r = 1; r < values.length; r++) {
+      if (String(values[r][keyIdx]) === stableId) { targetRow = r + 1; break; }
+    }
+    if (targetRow === -1) {
+      targetRow = Math.max(2, sh.getLastRow() + 1);
+      // Write the key first so concurrent uploads will find this row
+      sh.getRange(targetRow, keyIdx + 1).setValue(stableId);
+      SpreadsheetApp.flush();
+      // refresh header snapshot (in case of mutations elsewhere)
+      values = sh.getDataRange().getValues();
+      headers = values[0].map(function(h){ return String(h || '').trim(); });
+    }
+
+    // Ensure header exists (create column if needed)
+    var colIdx = headers.indexOf(field);
+    if (colIdx < 0) {
+      headers.push(field);
+      sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+      colIdx = headers.length - 1;
+    }
+
+    // Write cell value
+    sh.getRange(targetRow, colIdx + 1).setValue(value);
+    return { ok: true, saved: true, row: targetRow, field: field };
+  } finally {
+    try { lock.releaseLock(); } catch (_){}
   }
-  if (targetRow === -1) targetRow = Math.max(2, sh.getLastRow() + 1);
-
-  // Ensure header exists
-  var colIdx = headers.indexOf(field);
-  if (colIdx < 0) {
-    headers.push(field);
-    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
-    colIdx = headers.length - 1;
-  }
-
-  sh.getRange(targetRow, colIdx + 1).setValue(value);
-  return { ok: true, saved: true, row: targetRow, field: field };
 }
 
 /* ---------------------- Uploads (JSON, multipart, url-encoded) ---------------------- */
