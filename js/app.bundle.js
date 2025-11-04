@@ -482,3 +482,77 @@ function discardDraftIfNeeded(){ try{ const rec=rows[selectedIndex]; if(rec && r
     }
   }, true);
 })();
+
+/* === Hide empty sections when not editing === */
+(function(){
+  'use strict';
+  var modal   = document.getElementById('recordModal');
+  var content = document.getElementById('modalContent');
+  if (!modal || !content) return;
+
+  function isNonEmptyText(s){
+    return !!(String(s||'').replace(/\u00a0/g,' ').trim());
+  }
+
+  function sectionHasContent(section){
+    if (!section) return false;
+    // Any kv value with non-empty text
+    var kvs = section.querySelectorAll('.kv');
+    for (var i=0;i<kvs.length;i++){
+      var v = kvs[i].querySelector('.v');
+      if (v && isNonEmptyText(v.textContent)) return true;
+    }
+    // Any thumbnails/images rendered
+    var imgs = section.querySelectorAll('.thumb, .thumb-grid img, img');
+    for (var j=0;j<imgs.length;j++){
+      if (imgs[j].src && imgs[j].src.length > 10) return true;
+    }
+    // Any links present in values
+    var links = section.querySelectorAll('.v a[href]');
+    if (links.length) return true;
+
+    return false;
+  }
+
+  function applyHide(){
+    var editing = modal.classList.contains('editing');
+    var sections = content.querySelectorAll('.section');
+    for (var i=0;i<sections.length;i++){
+      var sec = sections[i];
+      // Always show in edit mode so users can add data
+      if (editing){
+        sec.style.display = '';
+        continue;
+      }
+      // View mode: hide if empty
+      if (sectionHasContent(sec)){
+        sec.style.display = '';
+      } else {
+        sec.style.display = 'none';
+      }
+    }
+  }
+
+  // Recalculate on open, on edit toggle, and after small delays to catch async renders
+  try{
+    var mo = new MutationObserver(function(){
+      if (modal.open) {
+        applyHide();
+        setTimeout(applyHide, 0);
+        setTimeout(applyHide, 150);
+        setTimeout(applyHide, 500);
+      }
+    });
+    mo.observe(modal, { attributes:true, attributeFilter:['open','class'] });
+  }catch(_){}
+
+  // Also re-run when images load (thumbnails arrive late)
+  content.addEventListener('load', function(e){
+    if ((e.target && e.target.tagName === 'IMG') || (e.target && e.target.classList && e.target.classList.contains('thumb'))){
+      applyHide();
+    }
+  }, true);
+
+  // Initial pass
+  setTimeout(applyHide, 100);
+})();
