@@ -346,3 +346,13 @@ body.modal-open {
   text-align: center;
   margin-top: 4px;
 }
+
+/* dropdown look in modal edit */
+#recordModal .hfd-select{
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+}

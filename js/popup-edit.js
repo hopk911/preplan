@@ -2,6 +2,46 @@
 (function () {
   'use strict';
 
+// === Dropdown config (single source of truth) ===
+const OCCUPANCY_OPTIONS = [
+  'Apartment','Assembly','Ambulatory Health Care','Business','Day Care','Detention and Correctional','Educational','Factory/Industrial','Health Care','High Hazard','Institutional','Mercantile','Mixed Use','One and Two Family Dwelling','Residential Board and Care','Storage','Utility/Misc','Vacant', 'Other', 'Unknown'
+];
+const CONSTRUCTION_TYPE_OPTIONS = ['Type I (Fire Resistive)','Type II (Non-Combustible)','Type III (Ordinary)','Type IV (Heavy Timber)','Type V (Wood Frame)'];
+const ROOF_TYPE_OPTIONS         = ['Flat','Pitched','Arch','Metal','Membrane','Hip','Gable','Gambrel','Mansard','Other'];
+const ELEVATOR_TYPE_OPTIONS     = ['Hydraulic','Traction','Machine-Room-Less (MRL)','None','Unknown'];
+const ALARM_TYPE_OPTIONS        = ['Local','Central Station','Proprietary','Remote Supervising','None','Unknown'];
+
+const FIELD_SELECTS = {
+  'occupancy': OCCUPANCY_OPTIONS,
+  'construction type': CONSTRUCTION_TYPE_OPTIONS,
+  'roof type': ROOF_TYPE_OPTIONS,
+  'elevator type': ELEVATOR_TYPE_OPTIONS,
+  'alarm type': ALARM_TYPE_OPTIONS
+};
+// === End dropdown config ===
+
+function _normLabel(s){ return String(s||'').toLowerCase().replace(/:\s*$/,'').trim(); }
+
+function buildSelect(options, currentValue){
+  const sel = document.createElement('select');
+  sel.className = 'hfd-select';
+  sel.setAttribute('data-select-for', '1');
+  const blank = document.createElement('option');
+  blank.value = '';
+  blank.textContent = '';
+  sel.appendChild(blank);
+  (options||[]).forEach(opt=>{
+    const o = document.createElement('option');
+    o.value = opt;
+    o.textContent = opt;
+    sel.appendChild(o);
+  });
+  if (currentValue && options.includes(currentValue)) sel.value = currentValue;
+  return sel;
+}
+
+
+
   const modal   = document.getElementById('recordModal');
   const content = document.getElementById('modalContent');
   const btn     = document.getElementById('btnModalEdit');
@@ -81,41 +121,78 @@ function ensureSID(){
 
 
   function setEditable(on){
-    modal.classList.toggle('editing', !!on);
-    btn.classList.toggle('toggled', !!on);
-    btn.textContent = on ? 'Save' : 'Edit';
-    content.querySelectorAll('.kv').forEach(row => {
-      const kEl = row.querySelector('.k');
-      const vEl = row.querySelector('.v');
-      if (!kEl || !vEl) return;
-      if (on){
-        const isKey = ((kEl.innerText||'').trim().replace(/:$/,'') === SID_HEADER);
-        row.classList.toggle('locked', isKey);
-        if (!isKey) vEl.setAttribute('contenteditable','true');
-      } else {
+  modal.classList.toggle('editing', !!on);
+  btn.classList.toggle('toggled', !!on);
+  btn.textContent = on ? 'Save' : 'Edit';
+
+  content.querySelectorAll('.kv').forEach(row => {
+    const kEl = row.querySelector('.k');
+    const vEl = row.querySelector('.v');
+    if (!kEl || !vEl) return;
+
+    const isKey = ((kEl.innerText||'').trim().replace(/:$/,'') === SID_HEADER);
+    row.classList.toggle('locked', isKey);
+
+    if (on){
+      if (isKey){
+        vEl.removeAttribute('contenteditable');
+        return;
+      }
+      const label = (kEl.innerText||'').trim();
+      const key   = _normLabel(label);
+      const opts  = FIELD_SELECTS[key];
+
+      if (Array.isArray(opts) && opts.length){
+        let sel = vEl.querySelector('select.hfd-select');
+        if (!sel){
+          const currentText = (vEl.innerText || '').trim();
+          vEl.innerHTML = '';
+          sel = buildSelect(opts, currentText);
+          vEl.appendChild(sel);
+        }
+      }else{
+        vEl.setAttribute('contenteditable','true');
+      }
+    } else {
+      const sel = vEl.querySelector('select.hfd-select');
+      if (sel){
+        const chosen = sel.value || '';
+        vEl.innerHTML = '';
+        vEl.textContent = chosen;
+      }else{
         vEl.removeAttribute('contenteditable');
       }
-    });
-  }
+    }
+  });
+}
+
 
   function collectFromPopup(){
-    const data = {};
-    content.querySelectorAll('.kv').forEach(row => {
-      const k = (row.querySelector('.k')?.innerText || '').replace(/\u00a0/g,' ').trim();
-      if (!k) return;
-      const vWrap = row.querySelector('.v');
-      const v = vWrap ? (vWrap.innerText || '').trim() : '';
-      data[/:\s*$/.test(k) ? k : (k + ':')] = v;
+  const data = {};
+  content.querySelectorAll('.kv').forEach(row => {
+    const k = (row.querySelector('.k')?.innerText || '').replace(/\u00a0/g,' ').trim();
+    if (!k) return;
+
+    const vWrap = row.querySelector('.v');
+    if (!vWrap) return;
+
+    const sel = vWrap.querySelector('select.hfd-select');
+    const v   = sel ? (sel.value || '') : ((vWrap.innerText || '').trim());
+
+    data[/:\s*$/.test(k) ? k : (k + ':')] = v;
+  });
+
+  const sid = ensureSID();
+  if (!data[SID_LABEL] && !data[SID_HEADER]) data[SID_LABEL] = String(sid);
+
+  if (window._currentRecord){
+    Object.keys(window._currentRecord).forEach(h => {
+      if (/:$/.test(h) && window._currentRecord[h] && /photo/i.test(h)) data[h] = window._currentRecord[h];
     });
-    const sid = ensureSID();
-    if (!data[SID_LABEL] && !data[SID_HEADER]) data[SID_LABEL] = String(sid);
-    if (window._currentRecord){
-      Object.keys(window._currentRecord).forEach(h => {
-        if (/:$/.test(h) && window._currentRecord[h] && /photo/i.test(h)) data[h] = window._currentRecord[h];
-      });
-    }
-    return data;
   }
+  return data;
+}
+
 
   async function saveViaPost(payload){
     const form = new URLSearchParams();
