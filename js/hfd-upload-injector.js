@@ -1,141 +1,52 @@
-// hfd-upload-injector.js — upload buttons inside correct sections (Sprinkler & Pump -> FIRE)
+
 (function(){
   if (window.__HFD_UPLOAD_INJECTOR__) return;
   window.__HFD_UPLOAD_INJECTOR__ = true;
-
-  const modal = document.getElementById('recordModal');
-  const body  = document.getElementById('modalContent') || document.querySelector('#recordModal .modal-content');
-  if (!modal || !body) { console.warn('[injector] modal/body not found'); return; }
-
-  const ORDER = (Array.isArray(window.SECTION_CONFIG) ? window.SECTION_CONFIG.map(s => s.id)
-                 : ['other','bldg','staging','fire','elevators','ems','water','electric','gas','hazmat']);
-
-  const PHOTO_UPLOAD_FOLDERS = {
-    'Photo:':                    '1a-g1z9wQmo5wSr8oIidoLg2wLt4BTwxO',
-    'Roof Access Photo:':        '1tlRVFlcBoWSG7jhs9uScwO93yE2qLccw',
-    'Alarm Photo:':              '1lAEJdYGwhPbAIUToHRnGvoz8X4hOJqOb',
-    'Elevator Shutoff Photo:':   '1eUFsCFkjbpzSnoUf2DK_lyMQyt3vG8Q3',
-    'Gas Shutoff Photo:':        '1grghRBy6VsryKhWephqeuJs_Uixq-sJE',
-    'Electrical Shutoff Photo:': '1YlVxc0h6dj0wp5oCeV-0aB8sWGtO_vfm',
-    'Water Shutoff Photo:':      '1zGqySR-Sks_YpDCj-C4lnhPM595TWivg',
-    'Sprinkler Shutoff Photo:':  '1p7aFq3gviIN4Bh8S7iQm-eDS6HaDNmK_',
-    'Fire Pump Photo:':          '1KKfbSQdha4NiKSQlNRTigUZPypE7RKNN',
-    'Tanks Photo:':              '1p2kmKIzyB_8PKwM8sqhAK9W6P75f5bQS',
-    'Combustibles Photo:':       '1-bvhTaL0en9zNsC8ZaLR6kdFWD5xw0ty',
-    'Hazmat Photo:':             '1eq2NtwoCga_o8s-A6Tc_QagCB2G-e2pQ'
-  };
-
-  function sectionForField(header){
-    const h = String(header||'').toLowerCase();
-    if (h === 'photo:')               return 'other';
-    if (h.includes('roof'))           return 'bldg';
-    if (h.includes('alarm'))          return 'fire';
-    if (h.includes('elevator'))       return 'elevators';
-    if (h.includes('gas'))            return 'gas';
-    if (h.includes('electrical'))     return 'electric';
-    if (h.includes('water shutoff'))  return 'water';
-    if (h.includes('sprinkler'))      return 'fire';      // <-- moved to FIRE
-    if (h.includes('pump'))           return 'fire';      // <-- moved to FIRE
-    if (h.includes('tank'))           return 'hazmat';
-    if (h.includes('combust'))        return 'hazmat';
-    if (h.includes('hazmat'))         return 'hazmat';
-    return 'other';
-  }
-
-  function labelForSection(secId){
-    if (Array.isArray(window.SECTION_CONFIG)){
-      const f = window.SECTION_CONFIG.find(x=>x.id===secId);
-      if (f && f.label) return f.label;
-    }
-    return secId.charAt(0).toUpperCase() + secId.slice(1);
-  }
-
-  function ensureSectionOrdered(secId){
-    if (!modal.classList.contains('editing')) return null;
-    let sec = document.getElementById('section-' + secId);
-    if (sec) return sec;
-
-    const newSec = document.createElement('section');
-    newSec.id = 'section-' + secId;
-    newSec.className = 'section';
-    newSec.setAttribute('data-color', secId);
-    newSec.dataset.hfdInjected = '1';
-
-    const h3 = document.createElement('h3');
-    h3.className = 'section-header';
-    h3.textContent = labelForSection(secId);
-    newSec.appendChild(h3);
-
-    const ORDER_LIST = ORDER;
-    const myIndex = ORDER_LIST.indexOf(secId);
-    const allSections = Array.from(body.querySelectorAll('section.section[id^="section-"]'));
-    let anchor = null;
-    for (const s of allSections){
-      const id = s.id.replace(/^section-/, '');
-      const idx = ORDER_LIST.indexOf(id);
-      if (idx > -1 && idx > myIndex) { anchor = s; break; }
-    }
-    if (anchor) body.insertBefore(newSec, anchor);
-    else body.appendChild(newSec);
-
-    return newSec;
-  }
-
-  function buttonBar(sec){
-    let bar = sec.querySelector('.per-section-uploads');
-    if (!bar){
-      bar = document.createElement('div');
-      bar.className = 'per-section-uploads';
-      const header = sec.querySelector('.section-header');
-      if (header && header.nextSibling) sec.insertBefore(bar, header.nextSibling);
-      else sec.appendChild(bar);
-    }
-    return bar;
-  }
-
-  function makeUploadBtn(fieldHeader){
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn btn-upload';
-    btn.dataset.field = fieldHeader;
-    btn.textContent = 'Upload ' + fieldHeader.replace(/:$/,'');
-    btn.addEventListener('click', () => {
-      if (!modal.classList.contains('editing')) return;
-      if (typeof window.hfdOpenFilePicker !== 'function') { alert('Uploader not available'); return; }
-      window.hfdOpenFilePicker(fieldHeader);
-    });
-    return btn;
-  }
-
-  function mountAll(){
-    if (!modal.classList.contains('editing')) return;
-    Object.keys(PHOTO_UPLOAD_FOLDERS).forEach((fieldHeader) => {
-      const secId = sectionForField(fieldHeader);
-      let sec = document.getElementById('section-' + secId);
-      if (!sec) sec = ensureSectionOrdered(secId);
-      if (!sec) return;
-      const bar = buttonBar(sec);
-      if (!bar.querySelector(`[data-field="${CSS.escape(fieldHeader)}"]`)){
-        bar.appendChild(makeUploadBtn(fieldHeader));
-      }
+  const modal=document.getElementById('recordModal'), content=document.getElementById('modalContent');
+  if(!modal||!content) return;
+  const SID_HEADER='Stable ID', SID_LABEL='Stable ID:';
+  function editToken(){ return sessionStorage.getItem('HFD_EDIT_TOKEN')||''; }
+  function getSID(){ const r=window._currentRecord||{}; const sid=r[SID_HEADER]||r[SID_LABEL]; return sid?String(sid).trim():''; }
+  async function postForm(obj){ const url=(window.WEBAPP_URL||''); if(!url) throw new Error('WEBAPP_URL not set'); const form=new URLSearchParams(); Object.entries(obj).forEach(([k,v])=>form.set(k, v==null?'':String(v))); form.set('token',editToken()); const res=await fetch(url,{method:'POST',body:form}); const j=await res.json(); if(!res.ok||j.ok===false) throw new Error(j.error||('HTTP '+res.status)); return j; }
+  async function ensureRow(){ const sid=getSID(); if(!sid) throw new Error('Missing Stable ID'); try{ await postForm({fn:'save', payload: JSON.stringify({[SID_HEADER]:sid,[SID_LABEL]:sid})}); }catch(_){ } return sid; }
+  async function postMultipart(file,header){ const url=(window.WEBAPP_URL||''); const fd=new FormData(); fd.append('fn','upload'); fd.append('field',header); fd.append('filename',file.name||'photo.jpg'); fd.append('token',editToken()); fd.append('file',file,file.name||'photo.jpg'); const res=await fetch(url,{method:'POST',body:fd}); const j=await res.json(); if(!res.ok||j.ok===false) throw new Error(j.error||('HTTP '+res.status)); return j; }
+  async function postDataUrl(file,header){ const dataUrl=await new Promise((ok,err)=>{ const fr=new FileReader(); fr.onerror=()=>err(new Error('reader failed')); fr.onload=()=>ok(fr.result); fr.readAsDataURL(file); }); return await postForm({fn:'upload', field:header, filename:file.name||'', dataUrl}); }
+  let queue=Promise.resolve(); function enqueue(task){ queue=queue.then(task).catch(()=>{}); return queue; }
+  function sectionFor(h){ h=String(h||'').toLowerCase(); if(/elev/.test(h))return 'elevators'; if(/fdc|alarm|sprinkler|riser|fire/.test(h))return 'fire'; if(/water|hydrant|cistern/.test(h))return 'water'; if(/electric|panel|breaker|generator/.test(h))return 'electric'; if(/gas|propane/.test(h))return 'gas'; if(/hazmat|chemical|flammable|tank/.test(h))return 'hazmat'; return 'other'; }
+  function ensureBar(id){ const sec=document.getElementById('section-'+id); if(!sec) return null; let bar=sec.querySelector('.per-section-uploads'); if(bar) return bar; bar=document.createElement('div'); bar.className='per-section-uploads'; const h3=sec.querySelector('h3'); if(h3&&h3.nextSibling) sec.insertBefore(bar,h3.nextSibling); else sec.prepend(bar); return bar; }
+  function photoHeaders(){ const ks=[...content.querySelectorAll('.kv .k')].map(el=>(el.textContent||'').trim()).filter(Boolean).filter(k=>/photo/i.test(k)); return ks.length?ks:['Photo:','Alarm Photo:','Roof Access Photo:','Elevator Shutoff Photo:','Elevator Key Photo:','FDC Photo:','Sprinkler Shutoff Photo:','Panel Photo:']; }
+  function mount(){
+    if(!modal.classList.contains('editing')) return;
+    photoHeaders().forEach(header=>{
+      const bar=ensureBar(sectionFor(header)); if(!bar) return;
+      if(bar.querySelector('[data-hfd-upload="'+header+'"]')) return;
+      const btn=document.createElement('button'); btn.className='btn'; btn.type='button'; btn.setAttribute('data-hfd-upload',header); btn.textContent='Upload: '+header;
+      const input=document.createElement('input'); input.type='file'; input.accept='image/*'; input.multiple=true; input.style.display='none';
+      const wrap=document.createElement('span'); wrap.className='upload-wrap'; wrap.appendChild(btn); wrap.appendChild(input); bar.appendChild(wrap);
+      btn.addEventListener('click',()=>input.click());
+      input.addEventListener('change',()=>{
+        if(!input.files||!input.files.length) return;
+        const sid=getSID(); if(!sid){ alert('Please click Edit first.'); return; }
+        const prev=btn.textContent; btn.disabled=true; btn.textContent='Uploading…';
+        enqueue(async ()=>{
+          const links=[];
+          try{
+            await ensureRow();
+            for(const f of input.files){
+              let out; try{ out=await postDataUrl(f,header);}catch(e1){ out=await postMultipart(f,header); }
+              const link=out.link||out.url||(out.id?('https://drive.google.com/uc?export=view&id='+out.id):''); if(link) links.push(link);
+            }
+          }catch(e){ console.error(e); alert('Upload failed: '+e.message); }
+          finally{ btn.disabled=false; btn.textContent=prev; input.value=''; }
+          if(!links.length) return;
+          const rec=window._currentRecord||{}; const base=(rec&&rec[header])?String(rec[header]).trim():''; const csv=[base,links.join(', ')].filter(Boolean).join(', ');
+          if(window._currentRecord) window._currentRecord[header]=csv;
+          await postForm({fn:'savefield', stableId:sid, field: /:$/.test(header)?header:(header+':'), value: csv});
+        });
+      });
     });
   }
-
-  function cleanup(){
-    body.querySelectorAll('.per-section-uploads').forEach(n => n.remove());
-    body.querySelectorAll('section.section[data-hfd-injected="1"]').forEach(n => n.remove());
-  }
-
-  modal.addEventListener('hfd-edit-start', mountAll);
-  modal.addEventListener('hfd-edit-end', cleanup);
-
-  const mo = new MutationObserver(() => {
-    if (modal.classList.contains('editing')) mountAll();
-    else cleanup();
-  });
-  mo.observe(modal, { attributes:true, attributeFilter:['class'] });
-
-  if (modal.classList.contains('editing')) mountAll();
-
-  console.log('[hfd-upload-injector] Sprinkler & Pump -> FIRE');
+  const mo=new MutationObserver(()=>{ if(modal.open&&modal.classList.contains('editing')){ mount(); setTimeout(mount,0); setTimeout(mount,300);} });
+  mo.observe(modal,{attributes:true, attributeFilter:['open','class']});
+  setInterval(()=>{ if(modal.open&&modal.classList.contains('editing')) mount(); },1200);
 })();
