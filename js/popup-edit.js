@@ -1,12 +1,24 @@
-// popup-edit.js — always require password before each Edit + reset if closed without save
+// popup-edit.js — edit PW every time + clean reset + toolbar + edit-start/end events
 (function () {
   'use strict';
 
-  const modal   = document.getElementById('recordModal');
-  const content = document.getElementById('modalContent');
-  const btn     = document.getElementById('btnModalEdit');
-  const closeBtn = document.getElementById('btnModalClose');
+  const modal     = document.getElementById('recordModal');
+  const content   = document.getElementById('modalContent') || document.querySelector('#recordModal .modal-body') || document.getElementById('recordModal');
+  const btn       = document.getElementById('btnModalEdit');
+  const closeBtn  = document.getElementById('btnCloseModal') || document.getElementById('btnModalClose');
   if (!modal || !content || !btn) { console.warn('[popup-edit.js] missing DOM'); return; }
+
+  // Move Edit & Close together in header toolbar (CSS controls layout)
+  (function mountToolbar(){
+    try{
+      const header = document.querySelector('#recordModal .modal-head') || document.getElementById('recordModal');
+      if (!header) return;
+      let bar = header.querySelector('.modal-toolbar');
+      if (!bar) { bar = document.createElement('div'); bar.className = 'modal-toolbar'; header.appendChild(bar); }
+      if (btn && btn.parentElement !== bar) bar.appendChild(btn);
+      if (closeBtn && closeBtn.parentElement !== bar) bar.appendChild(closeBtn);
+    }catch(e){ console.warn('mountToolbar failed', e); }
+  })();
 
   const WEBAPP_URL  = (window && window.WEBAPP_URL)  || '';
   const SID_HEADER = 'Stable ID', SID_LABEL = 'Stable ID:';
@@ -22,10 +34,10 @@
     content.querySelectorAll('.kv .v').forEach(v => v.removeAttribute('contenteditable'));
   }
 
+  // JSONP for password (avoids CORS on GitHub Pages)
   async function getEditToken() {
-    clearEditToken();
+    clearEditToken(); // force PW every time
     if (!window.WEBAPP_URL) { alert('WEBAPP_URL is not set'); throw new Error('No WEBAPP_URL'); }
-
     const pw = window.prompt('Enter edit password:');
     if (!pw) throw new Error('Password required');
 
@@ -43,7 +55,6 @@
     const url = window.WEBAPP_URL + '?fn=authedit&pw=' + encodeURIComponent(pw);
     const res = await jsonp(url);
     if (!res || !res.ok || !res.token) { alert('Invalid password'); throw new Error('Invalid password'); }
-
     setToken(res.token);
     return res.token;
   }
@@ -53,7 +64,6 @@
     const z = n=>String(n).padStart(2,'0');
     return `${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}-${Math.floor(Math.random()*65536).toString(36).padStart(4,'0')}`;
   }
-
   function ensureSID(){
     const rec = window._currentRecord = (window._currentRecord && typeof window._currentRecord==='object') ? window._currentRecord : {};
     let sid = rec[SID_HEADER] || rec[SID_LABEL];
@@ -87,6 +97,8 @@
         vEl.removeAttribute('contenteditable');
       }
     });
+    // inform others (injector) about edit state changes
+    modal.dispatchEvent(new CustomEvent(on ? 'hfd-edit-start' : 'hfd-edit-end', {bubbles:false}));
   }
 
   function collectFromPopup(){
@@ -122,7 +134,10 @@
 
   function closeModal(){
     try {
-      resetEditing(); // Reset UI
+      // announce end of edit (ensures injector cleans up)
+      modal.dispatchEvent(new CustomEvent('hfd-edit-end', {bubbles:false}));
+      clearEditToken();
+      resetEditing();
       if (typeof modal.close === 'function') modal.close();
       else modal.removeAttribute('open');
     } catch(_){}
@@ -134,10 +149,10 @@
       const tok = await getEditToken();
       if (!tok) return;
       ensureSID();
-      setEditable(true);
+      setEditable(true);   // emits hfd-edit-start
       return;
     }
-
+    // Save path
     const original = (window._currentRecord && typeof window._currentRecord==='object') ? window._currentRecord : {};
     const edited   = collectFromPopup();
     const payload  = Object.assign({}, original, edited);
@@ -148,33 +163,19 @@
     btn.disabled = true;
     try{
       await saveViaPost(payload);
-      clearEditToken();
-      resetEditing();
-      closeModal();
+      closeModal();        // clears token + emits hfd-edit-end + resets UI
       window.location.reload();
     }catch(e){
       console.error(e);
       alert('Save failed: ' + (e.message || e));
-      setEditable(true);
+      setEditable(true);   // stay in edit
     }finally{
       btn.disabled = false;
     }
   });
 
-  // Ensure clean state on any close
-  if (closeBtn) closeBtn.addEventListener('click', () => {
-    clearEditToken();
-    resetEditing();
-  });
-  modal.addEventListener('close', () => {
-    clearEditToken();
-    resetEditing();
-  });
-
-  // Also reset automatically when modal is reopened
-  new MutationObserver(() => {
-    if (modal.hasAttribute('open')) resetEditing();
-  }).observe(modal, { attributes: true, attributeFilter: ['open'] });
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  modal.addEventListener('close', closeModal);
 
   console.log('[popup-edit.js] ready. WEBAPP_URL:', WEBAPP_URL);
 })();
