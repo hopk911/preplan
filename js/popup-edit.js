@@ -14,30 +14,33 @@
   function editToken(){ return sessionStorage.getItem('HFD_EDIT_TOKEN') || ''; }
   function setToken(t){ if (t) sessionStorage.setItem('HFD_EDIT_TOKEN', t); }
 
-  async function getEditToken() {
-    try {
-      const cached = editToken();
-      if (cached) return cached;
-      if (!WEBAPP_URL) { alert('WEBAPP_URL is not set.'); throw new Error('WEBAPP_URL missing'); }
-      const pw = window.prompt('Enter edit password:');
-      if (!pw) { throw new Error('Password required'); }
-      const res = await fetch(WEBAPP_URL, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ fn:'authedit', pw })
-      });
-      let j = {};
-      try { j = await res.json(); } catch(_){}
-      if (!res.ok) throw new Error('Server error ' + res.status);
-      if (!j || !j.ok || !j.token) throw new Error('Invalid password');
-      setToken(j.token);
-      return j.token;
-    } catch (e) {
-      console.error('[getEditToken] ', e);
-      alert(e.message || 'Could not authenticate.');
-      return null;
-    }
+async function getEditToken() {
+  const existing = sessionStorage.getItem('HFD_EDIT_TOKEN');
+  if (existing) return existing;
+  if (!window.WEBAPP_URL) { alert('WEBAPP_URL is not set'); throw new Error('No WEBAPP_URL'); }
+
+  const pw = window.prompt('Enter edit password:');
+  if (!pw) throw new Error('Password required');
+
+  // Mini JSONP helper (avoids CORS)
+  function jsonp(url){
+    return new Promise((resolve, reject) => {
+      const cb = '__hfd_cb_' + Math.random().toString(36).slice(2);
+      window[cb] = (data) => { try{ delete window[cb]; }catch(_){}; s.remove(); resolve(data); };
+      const s = document.createElement('script');
+      s.onerror = () => { try{ delete window[cb]; }catch(_){}; s.remove(); reject(new Error('JSONP failed')); };
+      s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
+      document.head.appendChild(s);
+    });
   }
+
+  const url = window.WEBAPP_URL + '?fn=authedit&pw=' + encodeURIComponent(pw);
+  const res = await jsonp(url);
+  if (!res || !res.ok || !res.token) { alert('Invalid password'); throw new Error('Invalid password'); }
+
+  sessionStorage.setItem('HFD_EDIT_TOKEN', res.token);
+  return res.token;
+}
 
   function genSID(){
     const d = new Date();
