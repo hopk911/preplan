@@ -147,11 +147,11 @@ function _orderFor(sectionId){
 
   const TABLE_COLUMNS = [
     { key:'__photo__', label:'Photo',            getter:r=>firstPhotoWithSection(r) },
-    { key:'business',  label:'Business Name',    getter:r=>getField(r,['Business Name','Business Name:','Business','Name','Company','Facility Name']) },
-    { key:'address',   label:'Address',          getter:r=>getField(r,['Address','Address:','Site Address','Street Address','Location Address']) },
-    { key:'knox',      label:'Knox Box Location',getter:r=>getField(r,['Knox Box Location','Knox Box Location:','Knox Location','Knox Box']) },
-    { key:'fdc',      label:'FDC',              getter:r=>getField(r,['FDC','FDC:','FDC Location','FDC Location:','Fire Department Connection','Fire Department Connection:']) },
-    { key:'hydrant',   label:'Closest Hydrant',  getter:r=>getField(r,['Closest Hydrant','Closest Hydrant:','Nearest Hydrant','Hydrant Location']) }
+    { key:'business',  label:'Business Name',    getter:r=>getField(r,['Business Name:']) },
+    { key:'address',   label:'Address',          getter:r=>getField(r,['Address:']) },
+    { key:'knox',      label:'Knox Box Location',getter:r=>getField(r,['Knox Box Location:']) },
+    { key:'fdc',      label:'FDC',              getter:r=>getField(r,['FDC:']) },
+    { key:'hydrant',   label:'Closest Hydrant',  getter:r=>getField(r,['Closest Hydrant:']) }
   ];
 
   const BASE_HIDE_IN_MODAL = ['timestamp', 'time stamp', 'stable id', 'stableid'];
@@ -354,8 +354,8 @@ function renderPhotosBlock(items){ return items.length?`<div class="thumb-grid">
     window._currentRecord = rec;
   window._isNewDraft = !!(rec && rec.__isNew);
 
-    const title = getField(rec,['Business Name','Business Name:','Business','Name','Company']) ||
-                  getField(rec,['Address','Address:','Site Address','Street Address']) || 'Record';
+    const title = getField(rec,['Business Name:']) ||
+                  getField(rec,['Address:','Street Address']) || '';
     modalTitle.textContent = title;
 
     // Thumb
@@ -451,4 +451,34 @@ function discardDraftIfNeeded(){ try{ const rec=rows[selectedIndex]; if(rec && r
 function findStableKey(headersArr){ const CANON='Stable ID'; const hit=(headersArr||[]).find(h=> String(h||'').toLowerCase().replace(/[:\s]+$/,'').trim()==='stable id'); return hit||CANON; }
 function generateStableId(){ const t=new Date(), pad=n=>String(n).padStart(2,'0'); const stamp=`${t.getFullYear()}${pad(t.getMonth()+1)}${pad(t.getDate())}-${pad(t.getHours())}${pad(t.getMinutes())}${pad(t.getSeconds())}`; const rnd=Math.random().toString(36).slice(2,6).toUpperCase(); return `PP-${stamp}-${rnd}`; }
 function discardDraftIfNeeded(){ try{ const rec=rows[selectedIndex]; if(rec && rec.__isNew && !rec.__saved){ rows.splice(selectedIndex,1); selectedIndex=-1; renderTable && renderTable(); } }catch(e){ console.warn('[addNew] discardDraftIfNeeded',e); } }
-})(); 
+})();
+
+/* === Open-at-top for modal content (built-in) === */
+(function(){
+  'use strict';
+  var modal   = document.getElementById('recordModal');
+  var content = document.getElementById('modalContent');
+  if (!modal || !content) return;
+  function resetToTop(){
+    try{
+      content.scrollTop = 0;
+      requestAnimationFrame(function(){ content.scrollTop = 0; });
+      setTimeout(function(){ content.scrollTop = 0; }, 50);
+    }catch(_){}
+  }
+  // When dialog opens
+  try{
+    var mo = new MutationObserver(function(){
+      if (modal.open) resetToTop();
+    });
+    mo.observe(modal, { attributes:true, attributeFilter:['open'] });
+  }catch(_){}
+  // Also when a table row is clicked (belt & suspenders)
+  document.addEventListener('click', function(e){
+    var row = e.target && (e.target.closest && (e.target.closest('tr[data-row]') || e.target.closest('.row') || e.target.closest('.click-open')));
+    if (row){
+      setTimeout(resetToTop, 0);
+      setTimeout(resetToTop, 100);
+    }
+  }, true);
+})();

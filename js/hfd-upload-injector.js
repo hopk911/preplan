@@ -158,7 +158,7 @@
     if (bar) return bar;
     bar = document.createElement('div');
     bar.className = 'per-section-uploads';
-    bar.classList && bar.classList.add('per-section-uploads');
+    bar.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 10px;';
     const h3 = sectionEl.querySelector('h3');
     if (h3 && h3.nextSibling) sectionEl.insertBefore(bar, h3.nextSibling);
     else sectionEl.prepend(bar);
@@ -166,7 +166,7 @@
   }
 
   function mountButtons(){
-    if (!modal || !modal.classList.contains('editing')) return;
+    if (!modal) return;
     const rec = (window && window._currentRecord) ? window._currentRecord : {};
     Object.keys(PHOTO_UPLOAD_FOLDERS).forEach(header => {
       const secId = sectionForField(header);
@@ -189,7 +189,7 @@
       inp.style.display = 'none';
 
       const wrap = document.createElement('span');
-      wrap.classList && wrap.classList.add('upload-wrap');
+      wrap.style.cssText = 'display:inline-flex;gap:6px;align-items:center;';
       wrap.appendChild(btn); wrap.appendChild(inp);
       bar.appendChild(wrap);
 
@@ -232,11 +232,11 @@
     const mo = new MutationObserver(()=>{
       if (modal.classList.contains('editing')) mountButtons();
     });
-    mo.observe(modal, { attributes:true, attributeFilter:['class'] });
+    mo.observe(modal, { attributes:true, attributeFilter:['class','open'] });
   }
   // Also poll for robustness (some flows delay section rendering)
   setInterval(()=>{
-    if (modal && modal.open && modal.classList.contains('editing')) mountButtons();
+    if (modal && modal.open) mountButtons();
   }, 800);
 })();
 
