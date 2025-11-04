@@ -70,7 +70,9 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
 
 
 /* Hide only the photo inside the 'Other' row in the record modal */
-#recordModal #modalContent .is-other-row img { display: none !important; }
+#recordModal #modalContent .is-other-row img {
+ /* display: none !important;  -- removed to allow Other photos */ 
+}
 
 /* Hide photos only in 'Other' section (modal) */
 
@@ -180,7 +182,9 @@ body.modal-open {
 
 
 /* Hide photo grids in the 'Other' section inside the popup */
-#recordModal .section[data-color="other"] .thumb-grid { display: none !important; }
+#recordModal .section[data-color="other"] .thumb-grid {
+ /* display: none !important;  -- removed to allow Other photos */ 
+}
 
 
 
@@ -309,3 +313,19 @@ body.modal-open {
 
 /* Ensure the sections stop below the sticky nav when scrolled into view */
 .section{ scroll-margin-top: 64px; } /* adjust to your nav height */
+
+
+/* === Photo tile delete "X" visibility control === */
+#recordModal:not(.editing) .thumb-grid .del { display: none !important; }
+#recordModal.editing .thumb-grid .del {
+  position: absolute;
+  right: 8px; top: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #000;
+  color: #fff;
+  line-height: 1;
+}
+.photo-tile { position: relative; }

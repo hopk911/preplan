@@ -64,6 +64,7 @@ function buildImgWithFallback(srcOrId, cls, size){
   background:#333!important;
   color:#fff!important;
   border-bottom:2px solid #222!important;
+}
 .section[data-color="other"] > h3 {
   display: flex !important;
   justify-content: center !important;
@@ -164,6 +165,11 @@ function _orderFor(sectionId){
   };
 
   const FIELD_PATTERNS = [
+    [/^Alpha Photo:?$/i,'other'],
+    [/^Bravo Photo:?$/i,'other'],
+    [/^Charlie Photo:?$/i,'other'],
+    [/^Delta Photo:?$/i,'other'],
+
     [/^Ladder:?$/i,'staging'],
     [/^Engine:?$/i,'staging'],
     [/^Tanker:?$/i,'staging'],
@@ -346,7 +352,21 @@ openModal();
   var cls = 'kv' + (_empty ? ' empty' : '');
   return '<div class="' + cls + '"><div class="k">' + k + '</div><div class="v">' + _v + '</div></div>';
 }
-function renderPhotosBlock(items){ return items.length?`<div class="thumb-grid">`+items.map(it=>buildImgWithFallback(it.url,'',300)).join('')+`</div>`:''; }
+function renderPhotosBlock(items){
+  if (!items || !items.length) return '';
+  const tiles = items.map(it => {
+    const img = buildImgWithFallback(it.url, '', 300);
+    const h   = it.header || '';
+    return `
+      <div class="photo-tile"
+           data-photo-url="${encodeURIComponent(it.url)}"
+           data-photo-field="${String(h).replace(/\"/g,'&quot;')}">
+        ${img}
+        <span class="del" title="Delete">×</span>
+      </div>`;
+  }).join('');
+  return `<div class="thumb-grid">${tiles}</div>`;
+}
 
   function openModal(){
     const rec=rows[selectedIndex]||{};

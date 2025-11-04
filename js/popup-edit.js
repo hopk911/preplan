@@ -5,7 +5,7 @@
   const modal   = document.getElementById('recordModal');
   const content = document.getElementById('modalContent');
   const btn     = document.getElementById('btnModalEdit');
-  const closeBtn = document.getElementById('btnModalClose');
+  const closeBtn = document.getElementById('btnCloseModal');
   if (!modal || !content || !btn) { console.warn('[popup-edit.js] missing DOM'); return; }
 
   const WEBAPP_URL  = (window && window.WEBAPP_URL)  || '';
@@ -48,28 +48,37 @@
     return res.token;
   }
 
-  function genSID(){
-    const d = new Date();
-    const z = n=>String(n).padStart(2,'0');
-    return `${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}-${Math.floor(Math.random()*65536).toString(36).padStart(4,'0')}`;
-  }
+  
+function genSID(){
+  const d = new Date();
+  const z = n => String(n).padStart(2,'0');
+  const rand = Math.floor(Math.random()*65536).toString(36).padStart(4,'0');
+  // YYYYMMDD-HHMM-rand
+  return `${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}-${rand}`;
+}
 
-  function ensureSID(){
-    const rec = window._currentRecord = (window._currentRecord && typeof window._currentRecord==='object') ? window._currentRecord : {};
-    let sid = rec[SID_HEADER] || rec[SID_LABEL];
-    if (!sid || !String(sid).trim()){
-      sid = genSID();
-      rec[SID_HEADER] = sid;
-      rec[SID_LABEL]  = sid;
-      try{
-        const row = Array.from(content.querySelectorAll('.kv')).find(r => (r.querySelector('.k')?.innerText || '').trim().replace(/:$/,'') === SID_HEADER);
-        if (row){
-          const v = row.querySelector('.v'); if (v) v.textContent = sid;
-        }
-      }catch(_){}
-    }
-    return sid;
+
+  
+function ensureSID(){
+  const rec = (typeof window._currentRecord === 'object' && window._currentRecord) ? window._currentRecord : {};
+  window._currentRecord = rec;
+  let sid = rec[SID_HEADER] || rec[SID_LABEL];
+  if (!sid || !String(sid).trim()){
+    sid = genSID();
+    rec[SID_HEADER] = sid;
+    rec[SID_LABEL]  = sid;
+    try{
+      // Update the Stable ID row in the DOM if it exists
+      const rows = Array.from(content.querySelectorAll('.kv'));
+      const row = rows.find(r => ((r.querySelector('.k')?.innerText || '').trim().replace(/:$/, '') === SID_HEADER));
+      if (row){
+        const v = row.querySelector('.v'); if (v) v.textContent = sid;
+      }
+    }catch(_){}
   }
+  return sid;
+}
+
 
   function setEditable(on){
     modal.classList.toggle('editing', !!on);

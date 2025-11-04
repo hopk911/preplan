@@ -112,6 +112,11 @@
       'Tanks Photo:',
       'Combustibles Photo:',
       'Hazmat Photo:'
+    
+      ,'Alpha Photo:',
+      'Bravo Photo:',
+      'Charlie Photo:',
+      'Delta Photo:'
     ];
   }
 
