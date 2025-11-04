@@ -1,11 +1,11 @@
-
-// popup-edit.js — safer password flow with clear errors
+// popup-edit.js — always require password before each Edit
 (function () {
   'use strict';
 
   const modal   = document.getElementById('recordModal');
   const content = document.getElementById('modalContent');
   const btn     = document.getElementById('btnModalEdit');
+  const closeBtn = document.getElementById('btnModalClose');
   if (!modal || !content || !btn) { console.warn('[popup-edit.js] missing DOM'); return; }
 
   const WEBAPP_URL  = (window && window.WEBAPP_URL)  || '';
@@ -13,34 +13,36 @@
 
   function editToken(){ return sessionStorage.getItem('HFD_EDIT_TOKEN') || ''; }
   function setToken(t){ if (t) sessionStorage.setItem('HFD_EDIT_TOKEN', t); }
+  function clearEditToken(){ try{ sessionStorage.removeItem('HFD_EDIT_TOKEN'); }catch(_){} }
 
-async function getEditToken() {
-  const existing = sessionStorage.getItem('HFD_EDIT_TOKEN');
-  if (existing) return existing;
-  if (!window.WEBAPP_URL) { alert('WEBAPP_URL is not set'); throw new Error('No WEBAPP_URL'); }
+  async function getEditToken() {
+    // Always clear before prompting — ensures every Edit needs PW
+    clearEditToken();
 
-  const pw = window.prompt('Enter edit password:');
-  if (!pw) throw new Error('Password required');
+    if (!window.WEBAPP_URL) { alert('WEBAPP_URL is not set'); throw new Error('No WEBAPP_URL'); }
 
-  // Mini JSONP helper (avoids CORS)
-  function jsonp(url){
-    return new Promise((resolve, reject) => {
-      const cb = '__hfd_cb_' + Math.random().toString(36).slice(2);
-      window[cb] = (data) => { try{ delete window[cb]; }catch(_){}; s.remove(); resolve(data); };
-      const s = document.createElement('script');
-      s.onerror = () => { try{ delete window[cb]; }catch(_){}; s.remove(); reject(new Error('JSONP failed')); };
-      s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
-      document.head.appendChild(s);
-    });
+    const pw = window.prompt('Enter edit password:');
+    if (!pw) throw new Error('Password required');
+
+    // JSONP helper (avoids CORS)
+    function jsonp(url){
+      return new Promise((resolve, reject) => {
+        const cb = '__hfd_cb_' + Math.random().toString(36).slice(2);
+        window[cb] = (data) => { try{ delete window[cb]; }catch(_){}; s.remove(); resolve(data); };
+        const s = document.createElement('script');
+        s.onerror = () => { try{ delete window[cb]; }catch(_){}; s.remove(); reject(new Error('JSONP failed')); };
+        s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
+        document.head.appendChild(s);
+      });
+    }
+
+    const url = window.WEBAPP_URL + '?fn=authedit&pw=' + encodeURIComponent(pw);
+    const res = await jsonp(url);
+    if (!res || !res.ok || !res.token) { alert('Invalid password'); throw new Error('Invalid password'); }
+
+    setToken(res.token);
+    return res.token;
   }
-
-  const url = window.WEBAPP_URL + '?fn=authedit&pw=' + encodeURIComponent(pw);
-  const res = await jsonp(url);
-  if (!res || !res.ok || !res.token) { alert('Invalid password'); throw new Error('Invalid password'); }
-
-  sessionStorage.setItem('HFD_EDIT_TOKEN', res.token);
-  return res.token;
-}
 
   function genSID(){
     const d = new Date();
@@ -85,7 +87,7 @@ async function getEditToken() {
   function collectFromPopup(){
     const data = {};
     content.querySelectorAll('.kv').forEach(row => {
-      const k = (row.querySelector('.k')?.innerText || '').replace(/ /g,' ').trim();
+      const k = (row.querySelector('.k')?.innerText || '').replace(/\u00a0/g,' ').trim();
       if (!k) return;
       const vWrap = row.querySelector('.v');
       const v = vWrap ? (vWrap.innerText || '').trim() : '';
@@ -124,7 +126,7 @@ async function getEditToken() {
     const enteringEdit = !modal.classList.contains('editing');
     if (enteringEdit){
       const tok = await getEditToken();
-      if (!tok) return;        // show error already handled
+      if (!tok) return;        // invalid PW handled
       ensureSID();
       setEditable(true);
       return;
@@ -140,6 +142,7 @@ async function getEditToken() {
     btn.disabled = true;
     try{
       await saveViaPost(payload);
+      clearEditToken();       // lock after save
       closeModal();
       window.location.reload();
     }catch(e){
@@ -151,6 +154,9 @@ async function getEditToken() {
     }
   });
 
-  // Optional quick diagnostics in console
+  // Close button clears token too
+  if (closeBtn) closeBtn.addEventListener('click', clearEditToken);
+  modal.addEventListener('close', clearEditToken);
+
   console.log('[popup-edit.js] ready. WEBAPP_URL:', WEBAPP_URL);
 })();
