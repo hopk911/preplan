@@ -210,7 +210,7 @@ function ensureBar(id){
   // Always include a full known list + any detected in the DOM (union)
   // Always include a full known list + any detected in the DOM (union)
   function photoHeaders(){
-    const KNOWN = ['Photo:', 'Roof Access Photo:', 'Alarm Photo:', 'Elevator Shutoff Photo:', 'Gas Shutoff Photo:', 'Electrical Shutoff Photo:', 'Water Shutoff Photo:', 'Sprinkler Shutoff Photo:', 'Fire Pump Photo:', 'Tanks Photo:', 'Combustibles Photo:', 'Hazmat Photo:', 'Alpha Photo:', 'Bravo Photo:', 'Charlie Photo:', 'Delta Photo:', 'Knox Box Photo:', 'FDC Photo:', 'PIV Photo:', 'Basement Photo:', 'Elevator Photo:', 'AED Photo:', 'EMS Photo:'];
+    const KNOWN = ['Roof Access Photo:', 'Alarm Photo:', 'Elevator Shutoff Photo:', 'Gas Shutoff Photo:', 'Electrical Shutoff Photo:', 'Water Shutoff Photo:', 'Sprinkler Shutoff Photo:', 'Fire Pump Photo:', 'Tanks Photo:', 'Combustibles Photo:', 'Hazmat Photo:', 'Alpha Photo:', 'Bravo Photo:', 'Charlie Photo:', 'Delta Photo:', 'Aerial Photo:', 'Knox Box Photo:', 'FDC Photo:', 'PIV Photo:', 'Basement Photo:', 'Elevator Photo:', 'AED Photo:', 'EMS Photo:'];
     const fromDom = Array.from(content.querySelectorAll('.kv .k'))
       .map(el => (el.textContent || '').trim())
       .filter(Boolean)

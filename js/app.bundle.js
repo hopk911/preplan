@@ -145,7 +145,7 @@ function _orderFor(sectionId){
 
 
   const TABLE_COLUMNS = [
-    { key:'__photo__', label:'Photo',            getter:r=>firstPhotoWithSection(r) },
+    { key:'__photo__', label:'Alpha Photo',            getter:r=>firstPhotoWithSection(r) },
     { key:'business',  label:'Business Name',    getter:r=>getField(r,['Business Name:']) },
     { key:'address',   label:'Address',          getter:r=>getField(r,['Address:']) },
     { key:'knox',      label:'Knox Box Location',getter:r=>getField(r,['Knox Box Location:']) },
@@ -167,6 +167,7 @@ function _orderFor(sectionId){
     [/^Bravo Photo:?$/i,'other'],
     [/^Charlie Photo:?$/i,'other'],
     [/^Delta Photo:?$/i,'other'],
+    [/^Aerial Photo:?$/i,'other'],
     [/^Square Footage:?$/i,'bldg'],
     [/^Ladder:?$/i,'staging'],
     [/^Engine:?$/i,'staging'],
@@ -290,8 +291,7 @@ function _orderFor(sectionId){
         const p=String(part).trim(); if(p) candidates.push({url:p, header:h||''});
       });
     };
-    ['Photo','Primary Photo','Main Photo'].forEach(h=>pushParts(rec[h],h));
-    headers.forEach(h=>pushParts(rec[h],h));
+    ['Alpha Photo','Alpha Photo:'].forEach(h=>pushParts(rec[h],h));
     for(const c of candidates){ const id=extractDriveId(c.url); if(id) return {url:c.url, header:c.header}; }
     for(const c of candidates){ return {url:c.url, header:c.header}; }
     return {url:'', header:''};
@@ -641,4 +641,130 @@ function discardDraftIfNeeded(){ try{ const rec=rows[selectedIndex]; if(rec && r
 
   // Initial pass
   setTimeout(applyHide, 100);
+})();
+
+/* === Consistent photo order across all sections ======================= */
+(function(){
+  if (typeof document === 'undefined') return;
+
+  // 1) Global order (edit to your liking)
+  const GLOBAL_PHOTO_ORDER = [
+    'Alpha Photo:',
+    'Bravo Photo:',
+    'Charlie Photo:',
+    'Delta Photo:',
+	'Aerial Photo:',
+	'Business Photo:',
+    'Roof Access Photo:',
+    'Alarm Photo:',
+    'Elevator Shutoff Photo:',
+    'Sprinkler Shutoff Photo:',
+    'FDC Photo:',
+    'Fire Pump Photo:',
+    'Electrical Shutoff Photo:',
+    'Gas Shutoff Photo:',
+
+  ];
+
+  // quick lookup: field -> position
+  const RANK = new Map(GLOBAL_PHOTO_ORDER.map((name, i) => [name.trim(), i]));
+
+  // 2) Helpers to read the *field* a tile represents
+  function getFieldFromTile(tile){
+    // preferred: data attribute set when tile is created
+    const a = tile.getAttribute('data-photo-field');
+    if (a) return a.trim();
+
+    // fallback: look for a caption element with the field label
+    const cap = tile.querySelector('.caption, .thumb-caption, figcaption, .photo-label, .meta');
+    if (cap && cap.textContent) return cap.textContent.trim();
+
+    // last resort: try title/aria-label
+    const t = tile.getAttribute('title') || tile.getAttribute('aria-label') || '';
+    return t.trim();
+  }
+
+  // 3) Comparator by GLOBAL_PHOTO_ORDER, with stable fallback
+  function tileComparator(a, b){
+    const fa = getFieldFromTile(a);
+    const fb = getFieldFromTile(b);
+
+    const ra = RANK.has(fa) ? RANK.get(fa) : Number.MAX_SAFE_INTEGER;
+    const rb = RANK.has(fb) ? RANK.get(fb) : Number.MAX_SAFE_INTEGER;
+
+    if (ra !== rb) return ra - rb;
+
+    // If both unknown or same rank, keep a stable, readable order:
+    // compare field names, then original DOM position
+    if (fa !== fb) return fa.localeCompare(fb);
+    return 0; // leave as-is if truly identical
+  }
+
+  // 4) Apply to a single grid
+  function sortGrid(grid){
+    const tiles = Array.from(grid.querySelectorAll('.photo-tile'));
+    if (tiles.length < 2) return;
+
+    const sorted = tiles.slice().sort(tileComparator);
+    // Only touch DOM if something changes
+    for (let i = 0; i < tiles.length; i++){
+      if (tiles[i] !== sorted[i]){
+        const frag = document.createDocumentFragment();
+        sorted.forEach(t => frag.appendChild(t));
+        grid.appendChild(frag);
+        break;
+      }
+    }
+  }
+
+  // 5) Apply to all grids in the modal
+  function sortAllThumbGrids(root){
+    const grids = root.querySelectorAll('.thumb-grid');
+    grids.forEach(sortGrid);
+  }
+
+  // 6) Find modal roots safely
+  function getModalElements(){
+    const modal = document.getElementById('recordModal') || document.querySelector('[data-modal="record"]');
+    const modalContent = modal ? (modal.querySelector('.modal-content') || modal) : document.body;
+    return { modal, modalContent };
+  }
+
+  const { modal, modalContent } = getModalElements();
+
+  // 7) Run after modal content changes (thumbnails usually arrive asynchronously)
+  const mo = new MutationObserver(() => {
+    const { modal, modalContent } = getModalElements();
+    if (!modal) return;
+    if (!modal.hasAttribute('open')) return;
+    sortAllThumbGrids(modalContent);
+  });
+  mo.observe(document.documentElement, { childList: true, subtree: true });
+
+  // 8) Also run once on open and when switching tabs/sections
+  document.addEventListener('click', (e)=>{
+    if (e.target.closest?.('.pill,.tab,.section-nav button')) {
+      setTimeout(()=> {
+        const { modalContent } = getModalElements();
+        sortAllThumbGrids(modalContent);
+      }, 0);
+    }
+    if (e.target.id === 'btnOpenRecord' || e.target.closest?.('#btnOpenRecord')){
+      setTimeout(()=> {
+        const { modalContent } = getModalElements();
+        sortAllThumbGrids(modalContent);
+      }, 0);
+    }
+  }, true);
+
+  // 9) Safety: run once on DOM ready (in case modal content is already present)
+  if (document.readyState !== 'loading') {
+    const { modalContent } = getModalElements();
+    setTimeout(()=> sortAllThumbGrids(modalContent), 0);
+  } else {
+    document.addEventListener('DOMContentLoaded', ()=> {
+      const { modalContent } = getModalElements();
+      setTimeout(()=> sortAllThumbGrids(modalContent), 0);
+    });
+  }
 })();
