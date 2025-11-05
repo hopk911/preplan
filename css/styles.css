@@ -391,3 +391,42 @@ body.modal-open {
 /* === HFD: Group Edit + Close buttons on the right with spacing === */
 .modal-head { display: flex; align-items: center; justify-content: space-between; }
 .modal-actions { margin-left: auto; display: flex; gap: 14px; }
+
+
+/* === Image Lightbox (click-to-zoom in modal) === */
+#recordModal .img-lightbox{
+  position: fixed;
+  inset: 0;
+  z-index: 1200;              /* above modal/backdrop/upload wait */
+  background: rgba(0,0,0,.72);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+#recordModal .img-lightbox.open{ display: flex; }
+
+#recordModal .img-lightbox .close-hint{
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  font-size: 12px;
+  opacity: .9;
+  user-select: none;
+}
+
+
+/* === Lightbox stretch-to-fit === */
+.img-lightbox img{
+  display:block;
+  width: calc(65vw - 64px);   /* stretch by width by default */
+  height: auto;
+  max-width: none !important;
+  max-height: none !important;
+  border-radius: 14px;
+  box-shadow: 0 20px 48px rgba(0,0,0,.6);
+  background: #111;
+  object-fit: contain;         /* safety */
+}

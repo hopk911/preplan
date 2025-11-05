@@ -640,3 +640,57 @@ function discardDraftIfNeeded(){ try{ const rec=rows[selectedIndex]; if(rec && r
   // Initial pass
   setTimeout(applyHide, 100);
 })();
+
+
+/* === Modal photo click-to-zoom (lightbox) v3 === */
+(function(){
+  'use strict';
+  var modal   = document.getElementById('recordModal');
+  var content = document.getElementById('modalContent');
+  if (!modal || !content) return;
+
+  function ensureLightbox(){
+    var box = modal.querySelector('.img-lightbox');
+    if (box) return box;
+    box = document.createElement('div');
+    box.className = 'img-lightbox';
+    box.innerHTML = '<img alt="zoomed"/><div class="close-hint">Tap anywhere to close</div>';
+    modal.appendChild(box);
+    // Close on click or ESC
+    box.addEventListener('click', function(){ box.classList.remove('open'); });
+    document.addEventListener('keydown', function(ev){
+      if (box.classList.contains('open') && (ev.key === 'Escape' || ev.key === 'Esc')) box.classList.remove('open');
+    });
+    return box;
+  }
+
+  function resolveSrc(img){
+    var src = img && img.getAttribute('src');
+    try {
+      if (src && /[?&]w=\d+/.test(src)) {
+        src = src.replace(/([?&]w=)\d+/, '$1' + 2000); // ask the proxy for a larger width
+      }
+    } catch(_) {}
+    return src || '';
+  }
+
+  // Delegate to the modal content (covers .thumb-grid, .photo-tile, table thumbs, etc.)
+  content.addEventListener('click', function(ev){
+    var tgt = ev.target;
+    if (!tgt || tgt.tagName !== 'IMG') return;
+
+    // Ignore clicks on delete "X" or upload controls
+    if (tgt.closest('.del') || tgt.closest('.upload-wrap')) return;
+
+    // Only activate for images that are part of photo tiles / grids / table thumb class
+    var valid = tgt.closest('.thumb-grid') || tgt.classList.contains('thumb') || tgt.closest('.photo-tile');
+    if (!valid) return;
+
+    var src = resolveSrc(tgt);
+    if (!src) return;
+
+    var lb = ensureLightbox();
+    lb.querySelector('img').src = src;
+    lb.classList.add('open');
+  }, true);
+})();
