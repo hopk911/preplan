@@ -429,3 +429,9 @@ html.hide-wide-cols #dataTable td:nth-child(6){
   display: none !important;
 }
 
+/* Hide the modal section navigation on iPhone-size screens */
+@media (max-width: 740px) {
+  .modal .section-nav {
+    display: none !important;
+  }
+}
