@@ -385,3 +385,9 @@ body.modal-open {
   animation: hfd-spin 0.9s linear infinite;
 }
 @keyframes hfd-spin { to { transform: rotate(360deg); } }
+
+
+
+/* === HFD: Group Edit + Close buttons on the right with spacing === */
+.modal-head { display: flex; align-items: center; justify-content: space-between; }
+.modal-actions { margin-left: auto; display: flex; gap: 14px; }

@@ -351,6 +351,13 @@ function _orderFor(sectionId){
         }catch(_){}
         // Remove tile
         tile.parentNode && tile.parentNode.removeChild(tile);
+        // Notify UI that the field is now empty so an upload button can reappear
+        try{
+          document.dispatchEvent(new CustomEvent('hfd:photo-changed', {
+            detail: { field: field, hasPhoto: false }
+          }));
+        }catch(_){}
+
       }, false);
     }catch(_){}
   })();

@@ -165,6 +165,16 @@ function editToken(){ try{ return sessionStorage.getItem('HFD_EDIT_TOKEN') || ''
       wrap.appendChild(btn);
       wrap.appendChild(input);
       bar.appendChild(wrap);
+      // Hide button if field already has a value in current record
+      (function initialHide(){
+        try{
+          const rec = window._currentRecord || {};
+          const key = /:$/.test(header) ? header : (header + ':');
+          const val = String(rec[key] || rec[header] || '').trim();
+          wrap.hidden = !!val;
+        }catch(_){}
+      })();
+
 
       btn.addEventListener('click', () => input.click());
       input.addEventListener('change', () => {
@@ -204,13 +214,35 @@ function editToken(){ try{ return sessionStorage.getItem('HFD_EDIT_TOKEN') || ''
           if (window._currentRecord) window._currentRecord[header] = csv;
           const fieldName = /:$/.test(header) ? header : (header + ':');
           await postForm({ fn: 'savefield', stableId: getSID(), field: fieldName, value: csv });
-            hideWait();
+            
+          // Immediately hide this upload control and notify listeners
+          try{
+            wrap.hidden = true;
+            document.dispatchEvent(new CustomEvent('hfd:photo-changed', {
+              detail: { field: fieldName, hasPhoto: true }
+            }));
+          }catch(_){}
+hideWait();
         });
       });
     });
   }
 
-  // Mount on open / edit toggle
+  
+  // Keep upload buttons in sync when photos change elsewhere (e.g., deletion)
+  document.addEventListener('hfd:photo-changed', function(e){
+    try{
+      const f = e && e.detail && e.detail.field ? String(e.detail.field) : '';
+      if (!f) return;
+      const btn = modal.querySelector('[data-hfd-upload="' + f + '"]');
+      if (!btn) return;
+      const shell = btn.closest('.upload-wrap');
+      if (!shell) return;
+      shell.hidden = !!e.detail.hasPhoto;
+    }catch(_){}
+  });
+
+// Mount on open / edit toggle
   const mo = new MutationObserver(()=>{
     if (modal.open && modal.classList.contains('editing')){
       mount();
