@@ -97,7 +97,7 @@ const FIELD_ORDER = {
     'Roof Type:', 'Roof Cover:', 'Basement:', 'Notes:'
   ],
   fire: [
-    'FDC:', 'Remote Alarm Location:', 'Sprinkler Main Shutoff Location:',
+    'Remote Alarm Location:', 'Sprinkler Main Shutoff Location:',
     'Fire Pump Location:', 'Alarm Panel Location:', 'Pull Station Location:',
     'Extinguisher Location:', 'Ladder Access:', 'Stair Location:', 'Roof Access Location:'
   ],
@@ -126,7 +126,7 @@ const FIELD_ORDER = {
     'Combustibles Location:', 'Flammables Location:', 'MSDS Location:', 'Hazmat Notes:'
   ],
   other: [
-    'Business Name:', 'Address:', 'Knox Box Location:', 'Closest Hydrant:', 'Contact Name (1):', 'Contact Number (1):', 'Contact Name (2):', 'Contact Number (2):'
+    'Business Name:', 'Address:', 'Knox Box Location:', 'Closest Hydrant:', 'FDC Location:', 'PIV Location:', 'Contact Name (1):', 'Contact Number (1):', 'Contact Name (2):', 'Contact Number (2):'
   ]
    
 };
@@ -174,31 +174,31 @@ function _orderFor(sectionId){
     [/^Tanker:?$/i,'staging'],
     [/^Rescue:?$/i,'staging'],
     [/^Other Apparatus:?$/i,'staging'],
-[/^Address:?$/i,'other'],
+    [/^Address:?$/i,'other'],
     [/^Closest Hydrant:?$/i,'other'],
+    [/^FDC Location:?$/i,'other'],
+    [/^PIV Location:?$/i,'other'],
     [/^Knox Box Location:?$/i,'other'],
-[ /^Number of Stories:?$/i,'bldg' ],
+    [ /^Number of Stories:?$/i,'bldg' ],
     [ /^Occupancy:?$/i,'bldg' ],
     [ /^Notes:?$/i,'bldg' ],
     [ /^Construction Type:?$/i,'bldg' ],
     [ /^Roof Cover:?$/i,'bldg' ],
     [ /^Roof Type:?$/i,'bldg' ],
     [ /^Basement:?$/i,'bldg' ],
-[/^Remote Alarm Location:?$/i,'fire'],
+    [/^Remote Alarm Location:?$/i,'fire'],
     [/(^| )(sprinkler|sprinkler\s*main|sprinkler\s*shutoff)/i,'fire'],
     [/^Sprinkler Main Shutoff Location:?$/i,'fire'],
     [/^Roof Type:?$/i,'other'],
     [/^Roof Access Location:?$/i,'other'],
     [/^\s*Roof Access Photo\s*:?\s*$/i,'other'],
-    [/^(fdc|standpipe|riser|fire pump|alarm|pull|extinguisher|ladder|stair|roof|pre plan|knox)/i,'fire'],
+    [/^(standpipe|riser|fire pump|alarm|pull|extinguisher|ladder|stair|roof|pre plan|knox)/i,'fire'],
     [/(^| )(elevators?|lift|elevator bank|elevator key|elevator room|elev\b)/i,'elevators'],
     [/(^| )(ems|aed|narcan|medical)/i,'ems'],
     [/(^| )(water|hydrant|shutoff.*water)/i,'water'],
     [/(^| )(electric|electrical|panel|generator|shutoff.*electric)/i,'electric'],
     [/(^| )(gas|meter|propane|shutoff.*gas)/i,'gas'],
     [/(^| )(haz|msds|chemical|tank|combustible|flammable)/i,'hazmat'],
-    [/^Closest Hydrant$/i,'water'],
-    [/^Knox Box Location$/i,'fire']
   ];
   function sectionForField(label){
     let h = String(label||'').trim();
