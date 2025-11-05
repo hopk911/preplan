@@ -117,13 +117,15 @@ async function ensureRow(){
 
   function sectionFor(h){
     h = String(h||'').toLowerCase();
-    if (/elev/.test(h)) return 'elevators';
+    if (/elev|elevator/.test(h)) return 'elevators';
     if (/fdc|alarm|sprinkler|riser|fire pump|fire/.test(h)) return 'fire';
     if (/water|hydrant|cistern/.test(h)) return 'water';
     if (/electric|panel|breaker|generator/.test(h)) return 'electric';
     if (/gas|propane/.test(h)) return 'gas';
     if (/roof/.test(h)) return 'bldg';
+    if (/aed|ems/.test(h)) return 'ems';
     if (/hazmat|chemical|combustibles|flammable|tank/.test(h)) return 'hazmat';
+    if (/fdc|knox|piv/.test(h)) return 'other';
     return 'other';
   }
 
