@@ -94,7 +94,7 @@ const FIELD_ORDER = {
   ],
   bldg: [
     'Occupancy:', 'Construction Type:', 'Number of Stories:', 'Square Feet',
-    'Roof Type:', 'Roof Cover:', 'Basement:', 'Notes:'
+    'Roof Type:', 'Roof Cover:', 'Basement:', 'Notes:', 'Roof Access Location:'
   ],
   fire: [
     'Remote Alarm Location:', 'Sprinkler Main Shutoff Location:',
