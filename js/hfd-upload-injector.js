@@ -122,10 +122,10 @@ async function ensureRow(){
     if (/water|hydrant|cistern/.test(h)) return 'water';
     if (/electric|panel|breaker|generator/.test(h)) return 'electric';
     if (/gas|propane/.test(h)) return 'gas';
-    if (/roof/.test(h)) return 'bldg';
+    if (/roof|basement/.test(h)) return 'bldg';
     if (/aed|ems/.test(h)) return 'ems';
     if (/hazmat|chemical|combustibles|flammable|tank/.test(h)) return 'hazmat';
-    if (/fdc|knox|piv/.test(h)) return 'other';
+    if (/fdc|knox box|piv/.test(h)) return 'other';
     return 'other';
   }
 
