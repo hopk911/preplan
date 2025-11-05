@@ -41,6 +41,9 @@
   </style>
 </head>
 <body>
+  <!-- Offline banner -->
+  <div id="offlineBanner" class="offline-banner" hidden>You're offline — showing last saved data.</div>
+
   <header class="app-header">
     <div class="brand">HFD Pre-Plan</div>
     <div class="actions">
@@ -175,5 +178,35 @@ var modal = document.getElementById('recordModal');
 })();
 </script>
 
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js').catch(function(e){ console.warn('SW reg failed', e); });
+      });
+    }
+  </script>
+
+  <script>
+    (function(){
+      function setState(){
+        try{
+          var offline = (navigator.onLine === false);
+          var b = document.getElementById('offlineBanner');
+          if (!b) return;
+          b.hidden = !offline;
+          document.body.classList.toggle('offline-on', offline);
+        }catch(_){}
+      }
+      window.addEventListener('online', setState);
+      window.addEventListener('offline', setState);
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setState);
+      } else {
+        setState();
+      }
+      setState();
+    })();
+  </script>
 </body>
 </html>

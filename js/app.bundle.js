@@ -8,6 +8,21 @@ console.log('[bundle] JSONP rows build is active');
 (function(){
   'use strict';
 
+// ---- Offline rows cache helpers ----
+function rowsCacheKey(){ return 'hfd:rows:v1'; }
+function saveRowsCache(arr){
+  try{ localStorage.setItem(rowsCacheKey(), JSON.stringify({t:Date.now(), data:arr||[]})); }catch(_){}
+}
+function loadRowsCache(){
+  try{
+    const raw = localStorage.getItem(rowsCacheKey());
+    if (!raw) return [];
+    const j = JSON.parse(raw);
+    return Array.isArray(j && j.data) ? j.data : [];
+  }catch(_){ return []; }
+}
+function isOffline(){ return (typeof navigator!=='undefined' && navigator && navigator.onLine===false); }
+
   // ---------- Config ----------
   const CFG = {
     get sheet(){ return window.GOOGLE_SHEET_JSON_URL || ''; },
@@ -26,50 +41,21 @@ console.log('[bundle] JSONP rows build is active');
   
 function buildImgWithFallback(srcOrId, cls, size){
   if (!srcOrId) return '';
-  const w   = size || 600;
-  const id  = extractDriveId(srcOrId);
-  const klass = cls ? (' ' + cls) : '';
-
-  // Build the two possible URLs (proxy + Drive CDN), same as before
-  const driveThumb = id
-    ? ('https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w' + w)
-    : String(srcOrId);
-
+  const w = size || 600;
+  const id = extractDriveId(srcOrId);
+  const driveThumb = id ? ('https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w' + w) : String(srcOrId);
   const webapp = (window.WEBAPP_URL||'').replace(/\/$/,'');
-  const good   = !!(webapp && /^https:\/\/script\.google\.com\//.test(webapp) && webapp.length > 40);
-  const proxied = (good && id) ? (webapp + '?fn=img&id=' + encodeURIComponent(id) + '&w=' + w) : '';
-
-  // ---- sessionStorage cache (keyed by Drive file id) ----
-  let cached = '';
-  if (id) {
-    try { cached = sessionStorage.getItem('photo:' + id) || ''; } catch(_) {}
+  const good = !!(webapp && /^https:\/\/script\.google\.com\//.test(webapp) && webapp.length > 40);
+  const proxied = (good && id) ? (webapp + '?id=' + encodeURIComponent(id) + '&w=' + w) : '';
+  const klass = cls ? (' ' + cls) : '';
+  if (proxied) {
+    // Proxy FIRST; if it fails, fall back to Drive thumb
+    const onerr = "this.onerror=null;this.src='" + driveThumb.replace("'", "\\'") + "'";
+    return '<img src="' + proxied + '" onerror="' + onerr + '" class="thumb' + klass + '" loading="lazy" alt="photo">';
   }
-
-  // Choose initial src (prefer cached -> proxy -> driveThumb)
-  const initialSrc = cached || (proxied || driveThumb);
-
-  // onerror: switch to the other source
-  const onerr = proxied
-    ? ("this.onerror=null;this.src='" + driveThumb.replace("'", "\'") + "'")
-    : ("this.onerror=null;this.src='" + proxied.replace("'", "\'") + "'");
-
-  // onload: write back to cache
-  const onload = id
-    ? ("try{sessionStorage.setItem('photo:" + id + "', this.src)}catch(e){}")
-    : "";
-
-  // data-pid helps debugging/inspection
-  return '<img'
-      + ' src="' + initialSrc + '"'
-      + (id ? (' data-pid="' + id + '"') : '')
-      + ' class="thumb' + klass + '"'
-      + ' loading="lazy" decoding="async"'
-      + (onload ? (' onload="' + onload + '"') : '')
-      + ' onerror="' + onerr + '"'
-      + ' alt="photo">';
+  return '<img src="' + driveThumb + '" class="thumb' + klass + '" loading="lazy" alt="photo">';
 }
-
-var loadThumbsWithin = function(){ /* no-op in drive-only mode */ };
+  var loadThumbsWithin = function(){ /* no-op in drive-only mode */ };
 // ---------- Sections & routing ----------
  const SECTION_CONFIG = [
   { id:'other',     label:'Other',     color:'other'     },
@@ -253,6 +239,14 @@ function _orderFor(sectionId){
   }
   function normalizeSheetUrl(u){ return (u||'').trim().replace(/\/pubhtml(\?.*)?$/i,'/pub?output=csv'); }
  async function loadData(){
+  // offline-aware
+  try{
+    if (isOffline()){
+      const cached = loadRowsCache();
+      if (Array.isArray(cached) && cached.length) return cached;
+    }
+  }catch(_){}
+
   const webapp = (window.WEBAPP_URL || '').replace(/\/$/,'');
   // 1) Try JSONP rows from Apps Script first (works for domain users; no CORS)
   if (webapp){
@@ -271,7 +265,7 @@ function _orderFor(sectionId){
         s.onerror = function(){ delete window[cb]; reject(new Error('rows: jsonp error')); };
         document.head.appendChild(s);
       });
-      return data;
+      saveRowsCache(data); return data;
     }catch(e){
       console.warn('WebApp rows failed, falling back to CSV:', e);
     }
@@ -279,7 +273,7 @@ function _orderFor(sectionId){
 
   // 2) Fallback to CSV if your admin ever allows publish-to-web again
   const eff = normalizeSheetUrl(CFG.sheet);
-  if(!eff) return SAMPLE_DATA;
+  if(!eff) saveRowsCache(SAMPLE_DATA); return SAMPLE_DATA;
   try{
     if(/output=csv/i.test(eff)){
       const t = await fetch(eff).then(r => r.text());
@@ -291,7 +285,7 @@ function _orderFor(sectionId){
     return Array.isArray(j.data) ? j.data : (Array.isArray(j) ? j : []);
   }catch(e){
     console.warn('Fetch failed, using SAMPLE_DATA:', e);
-    return SAMPLE_DATA;
+    saveRowsCache(SAMPLE_DATA); return SAMPLE_DATA;
   }
 }
 

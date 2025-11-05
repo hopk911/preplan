@@ -391,3 +391,17 @@ body.modal-open {
 /* === HFD: Group Edit + Close buttons on the right with spacing === */
 .modal-head { display: flex; align-items: center; justify-content: space-between; }
 .modal-actions { margin-left: auto; display: flex; gap: 14px; }
+
+/* === Offline banner === */
+.offline-banner{
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  background: #fde68a;           /* amber-200 */
+  color: #7c2d12;                /* amber-900 */
+  border-bottom: 1px solid #f59e0b;
+  text-align: center;
+  padding: 6px 10px;
+  font-size: 14px;
+  z-index: 2000;
+}
+body.offline-on{ padding-top: 36px; }
