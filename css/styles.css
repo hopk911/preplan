@@ -405,3 +405,17 @@ body.modal-open {
   z-index: 2000;
 }
 body.offline-on{ padding-top: 36px; }
+
+
+/* Hide last 3 table columns on small iPhone-sized screens */
+@media (max-width: 430px) {
+  #dataTable th:nth-child(4),
+  #dataTable td:nth-child(4),  /* Knox Box Location */
+  #dataTable th:nth-child(5),
+  #dataTable td:nth-child(5),  /* FDC */
+  #dataTable th:nth-child(6),
+  #dataTable td:nth-child(6) { /* Closest Hydrant */
+    display: none;
+  }
+}
+
