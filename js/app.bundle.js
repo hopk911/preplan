@@ -93,8 +93,8 @@ const FIELD_ORDER = {
     'Ladder:', 'Engine:', 'Tanker:', 'Rescue:', 'Other Apparatus:'
   ],
   bldg: [
-    'Occupancy:', 'Occupancy Notes:','Construction Type:', 
-    'Construction Type Notes:', 'Number of Stories:',
+    'Occupancy:', 'Building Construction Notes:','Construction Type:', 
+    'Construction Type Notes:', 'Number of Stories:', 'Square Feet',
     'Roof Type:', 'Basement:'
   ],
   fire: [
