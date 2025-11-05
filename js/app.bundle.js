@@ -97,9 +97,8 @@ const FIELD_ORDER = {
     'Roof Type:', 'Roof Cover:', 'Basement:', 'Notes:', 'Roof Access Location:'
   ],
   fire: [
-    'Remote Alarm Location:', 'Sprinkler Main Shutoff Location:',
-    'Fire Pump Location:', 'Alarm Panel Location:', 'Pull Station Location:',
-    'Extinguisher Location:', 'Ladder Access:', 'Stair Location:', 'Roof Access Location:'
+    'Alarm Type', 'Alarm Panel Location:', 'Remote Alarm Location:', 'Sprinkler Main Shutoff Location:',
+    'Fire Pump Location:', 'Roof Access Location:'
   ],
   elevators: [
     'Elevator Type:', 'Elevator Shutoff Location:', 'Elevator Room Location:',
