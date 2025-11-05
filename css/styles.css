@@ -68,13 +68,10 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
 .section[data-color="bldg"] h3{ background: var(--c-bldg); }
 
 
-
 /* Hide only the photo inside the 'Other' row in the record modal */
 #recordModal #modalContent .is-other-row img {
  /* display: none !important;  -- removed to allow Other photos */ 
 }
-
-/* Hide photos only in 'Other' section (modal) */
 
 /* Empty-field visibility */
 .kv.empty{display:none}
@@ -429,4 +426,14 @@ body.modal-open {
   box-shadow: 0 20px 48px rgba(0,0,0,.6);
   background: #111;
   object-fit: contain;         /* safety */
+}
+
+/* Remove (hide) the thumbnail and title in the modal header */
+.modal-head #modalThumbWrap{
+  display: none !important;
+}
+
+/* With those gone, right-align the header buttons neatly */
+.modal-head {
+  justify-content: flex-end !important;
 }
