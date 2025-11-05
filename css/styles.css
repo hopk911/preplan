@@ -68,10 +68,13 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
 .section[data-color="bldg"] h3{ background: var(--c-bldg); }
 
 
+
 /* Hide only the photo inside the 'Other' row in the record modal */
 #recordModal #modalContent .is-other-row img {
  /* display: none !important;  -- removed to allow Other photos */ 
 }
+
+/* Hide photos only in 'Other' section (modal) */
 
 /* Empty-field visibility */
 .kv.empty{display:none}
@@ -388,52 +391,3 @@ body.modal-open {
 /* === HFD: Group Edit + Close buttons on the right with spacing === */
 .modal-head { display: flex; align-items: center; justify-content: space-between; }
 .modal-actions { margin-left: auto; display: flex; gap: 14px; }
-
-
-/* === Image Lightbox (click-to-zoom in modal) === */
-#recordModal .img-lightbox{
-  position: fixed;
-  inset: 0;
-  z-index: 1200;              /* above modal/backdrop/upload wait */
-  background: rgba(0,0,0,.72);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-#recordModal .img-lightbox.open{ display: flex; }
-
-#recordModal .img-lightbox .close-hint{
-  position: absolute;
-  bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  color: #fff;
-  font-size: 12px;
-  opacity: .9;
-  user-select: none;
-}
-
-
-/* === Lightbox stretch-to-fit === */
-.img-lightbox img{
-  display:block;
-  width: calc(65vw - 64px);   /* stretch by width by default */
-  height: auto;
-  max-width: none !important;
-  max-height: none !important;
-  border-radius: 14px;
-  box-shadow: 0 20px 48px rgba(0,0,0,.6);
-  background: #111;
-  object-fit: contain;         /* safety */
-}
-
-/* Remove (hide) the thumbnail and title in the modal header */
-.modal-head #modalThumbWrap{
-  display: none !important;
-}
-
-/* With those gone, right-align the header buttons neatly */
-.modal-head {
-  justify-content: flex-end !important;
-}

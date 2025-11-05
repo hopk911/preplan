@@ -50,8 +50,37 @@ function editToken(){ try{ return sessionStorage.getItem('HFD_EDIT_TOKEN') || ''
     return j;
   }
 
-  async function ensureRow(){
-    const sid = getSID();
+  
+  // --- Helpers: strong SID and savefield with token retry ---
+  function getStableIdStrong(){
+    try{
+      var r = window._currentRecord || {};
+      var sid = (r['Stable ID'] || r['Stable ID:'] || '').toString().trim();
+      if (!sid && typeof window.ensureSID === 'function') sid = String(window.ensureSID()||'').trim();
+      if (!sid) sid = String(getSID()||'').trim();
+      return sid || '';
+    }catch(_){ return ''; }
+  }
+
+  async function saveFieldWithRetry(fieldName, value){
+    let sid = getStableIdStrong();
+    if (!sid) throw new Error('Missing Stable ID');
+    async function tryOnce(){
+      return await postForm({ fn:'savefield', stableId:sid, field:fieldName, value:value });
+    }
+    try {
+      return await tryOnce();
+    } catch(e){
+      // refresh token and retry once
+      try{
+        if (typeof window.getEditToken === 'function') { await window.getEditToken(); }
+      }catch(_){}
+      return await tryOnce();
+    }
+  }
+
+async function ensureRow(){
+    const sid = (typeof ensureSID==='function' ? ensureSID() : getSID());
     if (!sid) throw new Error('Missing Stable ID');
     try{
       await postForm({ fn:'save', payload: JSON.stringify({ [SID_HEADER]:sid, [SID_LABEL]:sid }) });
@@ -179,7 +208,7 @@ function editToken(){ try{ return sessionStorage.getItem('HFD_EDIT_TOKEN') || ''
       btn.addEventListener('click', () => input.click());
       input.addEventListener('change', () => {
         if (!input.files || !input.files.length) return;
-        const sid = getSID();
+        const sid = (typeof ensureSID==='function' ? ensureSID() : getSID());
         if (!sid){ alert('Please click Edit first.'); return; }
         const prev = btn.textContent;
         btn.disabled = true;
@@ -208,13 +237,21 @@ function editToken(){ try{ return sessionStorage.getItem('HFD_EDIT_TOKEN') || ''
             input.value = '';
           }
 
-          if (!links.length) return;
+          if (!links.length) { try{ hideWait(); }catch(_){ } return; }
           const rec  = window._currentRecord || {};
           const csv  = (links && links.length) ? links[0] : '';
           if (window._currentRecord) window._currentRecord[header] = csv;
           const fieldName = /:$/.test(header) ? header : (header + ':');
-          await postForm({ fn: 'savefield', stableId: getSID(), field: fieldName, value: csv });
+          await saveFieldWithRetry(fieldName, csv);
             
+          // Optionally autosave the whole record if we already have a token
+          try{
+            var hasTok = false;
+            try{ hasTok = !!sessionStorage.getItem('HFD_EDIT_TOKEN'); }catch(_){}
+            if (hasTok && typeof window.hfdAutoSaveDraft === 'function'){
+              await window.hfdAutoSaveDraft('photo-upload');
+            }
+          }catch(_){}
           // Immediately hide this upload control and notify listeners
           try{
             wrap.hidden = true;

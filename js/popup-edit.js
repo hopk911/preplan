@@ -2,6 +2,51 @@
 (function () {
   'use strict';
 
+
+// ==== SID helpers (safe defaults) ====
+window.SID_HEADER = window.SID_HEADER || 'Stable ID';
+window.SID_LABEL  = window.SID_LABEL  || 'SID';
+
+/** Generate a stable ID if none exists (base36 timestamp + random). */
+function genSID(){
+  try{
+    const t = Date.now().toString(36);
+    const r = Math.random().toString(36).slice(2,8);
+    const prefix = (window._userInitials || '').toString().replace(/[^A-Za-z0-9]/g,'').toUpperCase();
+    return (prefix ? (prefix + '-') : '') + t + '-' + r;
+  }catch(_){
+    // ultra-fallback
+    return 'sid-' + Math.random().toString(36).slice(2) + '-' + Date.now().toString(36);
+  }
+}
+
+/** Ensure we always have a SID cached and on the current record */
+function ensureSID(){
+  try{
+    let sid =
+      (window._currentSID) ||
+      (window._currentRecord && (window._currentRecord['Stable ID'] || window._currentRecord['SID'] || window._currentRecord['Stable ID:'])) ||
+      '';
+
+    if (!sid) sid = genSID();
+    window._currentSID = sid;
+
+    // reflect into record so saves include it
+    if (window._currentRecord && typeof window._currentRecord === 'object'){
+      window._currentRecord[window.SID_HEADER] = sid;
+      window._currentRecord[window.SID_LABEL]  = sid;
+    }
+    return sid;
+  }catch(e){
+    // as a last resort
+    const sid = genSID();
+    window._currentSID = sid;
+    return sid;
+  }
+}
+
+
+
 // === Dropdown config (single source of truth) ===
 const OCCUPANCY_OPTIONS = [
   'Apartment','Assembly','Ambulatory Health Care','Business','Day Care','Detention and Correctional','Educational','Factory/Industrial','Health Care','High Hazard','Institutional','Mercantile','Mixed Use','One and Two Family Dwelling','Residential Board and Care','Storage','Utility/Misc','Vacant', 'Other', 'Unknown'
