@@ -6,9 +6,32 @@
   const modal = document.getElementById('recordModal');
   const content = document.getElementById('modalContent');
   if (!modal || !content) return;
+  (function ensureBottomBarStyle(){
+    if(document.getElementById('per-section-uploads-bottom-style')) return;
+    const st = document.createElement('style');
+    st.id = 'per-section-uploads-bottom-style';
+    st.textContent = [
+      '.per-section-uploads{margin-top:12px; padding-top:8px; border-top:1px dashed rgba(0,0,0,.15);}',
+      '.per-section-uploads .upload-wrap{margin-right:8px; display:inline-block}'
+    ].join('\n');
+    document.head.appendChild(st);
+  })();
+
 
   const SID_HEADER = 'Stable ID';
-  const SID_LABEL  = 'Stable ID:';
+  
+  // Light CSS so the button sits under the photo/value neatly
+  (function ensureUploadWrapStyle(){
+    if(document.getElementById('upload-wrap-style')) return;
+    const st = document.createElement('style');
+    st.id = 'upload-wrap-style';
+    st.textContent = [
+      '.kv .upload-wrap{display:block;margin-top:8px}',
+      '.kv .upload-wrap .upload-btn{font-size:12px;padding:6px 10px}'
+    ].join('\n');
+    document.head.appendChild(st);
+  })();
+const SID_LABEL  = 'Stable ID:';
 
   
 
@@ -118,18 +141,59 @@ async function ensureRow(){
   function sectionFor(h){
     h = String(h||'').toLowerCase();
     if (/elev|elevator/.test(h)) return 'elevators';
-    if (/fdc|alarm|sprinkler|riser|fire pump|fire/.test(h)) return 'fire';
+    if (/alarm|sprinkler|riser|fire pump|fire/.test(h)) return 'fire';
     if (/water|hydrant|cistern/.test(h)) return 'water';
     if (/electric|panel|breaker|generator/.test(h)) return 'electric';
     if (/gas|propane/.test(h)) return 'gas';
     if (/roof|basement/.test(h)) return 'bldg';
     if (/aed|ems/.test(h)) return 'ems';
     if (/hazmat|chemical|combustibles|flammable|tank/.test(h)) return 'hazmat';
-    if (/fdc|knox box|piv/.test(h)) return 'other';
+    if (/fdc/.test(h)) return 'other';
+    if (/knox box|piv/.test(h)) return 'other';
     return 'other';
   }
 
-  function ensureBar(id){
+  
+  // Find the .kv row (and its value cell) for a given exact header label
+  
+  // Try to locate the thumbnail/card node for a given photo header
+  function findPhotoAnchor(header){
+    try{
+      const raw = header.replace(/\:$/, '');
+      const noPhoto = raw.replace(/\s*Photo$/i, '');
+      const variants = new Set([header, raw, noPhoto, noPhoto + ' Photo', noPhoto + ' photo', noPhoto + ' Photo:']);
+      // scan small elements likely to be captions/labels
+      const smalls = Array.from(content.querySelectorAll('figcaption, .caption, .thumb-caption, .photo-caption, .kv .k, .label, .tag, small, .pill, h6'));
+      for(const el of smalls){
+        const t = (el.textContent||'').trim();
+        if(!t) continue;
+        if(variants.has(t)){
+          // bubble up to a likely card/thumb container
+          let p = el;
+          for(let depth=0; depth<5 && p; depth++){
+            if(p.matches && /thumb|photo|image|card|fig/i.test(p.className||'')) return p;
+            p = p.parentElement;
+          }
+          // fallback: return the element itself
+          return el;
+        }
+      }
+    }catch(_){}
+    return null;
+  }
+function findKVRow(header){
+    try{
+      const rows = Array.from(content.querySelectorAll('.kv'));
+      for(const r of rows){
+        const k = r.querySelector('.k');
+        if(!k) continue;
+        const label = (k.textContent||'').trim();
+        if(label === header) return {row:r, v:r.querySelector('.v')||r};
+      }
+    }catch(_){}
+    return null;
+  }
+function ensureBar(id){
     const sec = document.getElementById('section-'+id);
     if (!sec) return null;
     let bar = sec.querySelector('.per-section-uploads');
@@ -137,39 +201,21 @@ async function ensureRow(){
     bar = document.createElement('div');
     bar.className = 'per-section-uploads';
     const h3 = sec.querySelector('h3');
-    if (h3 && h3.nextSibling) sec.insertBefore(bar, h3.nextSibling);
-    else sec.prepend(bar);
+    sec.appendChild(bar);
+    /* bottom placement */
     return bar;
   }
 
   // FIX: the spread syntax line was broken earlier. This version is correct.
+  // Always include a full known list + any detected in the DOM (union)
+  // Always include a full known list + any detected in the DOM (union)
   function photoHeaders(){
-    const ks = [...content.querySelectorAll('.kv .k')]
+    const KNOWN = ['Photo:', 'Roof Access Photo:', 'Alarm Photo:', 'Elevator Shutoff Photo:', 'Gas Shutoff Photo:', 'Electrical Shutoff Photo:', 'Water Shutoff Photo:', 'Sprinkler Shutoff Photo:', 'Fire Pump Photo:', 'Tanks Photo:', 'Combustibles Photo:', 'Hazmat Photo:', 'Alpha Photo:', 'Bravo Photo:', 'Charlie Photo:', 'Delta Photo:', 'Knox Box Photo:', 'FDC Photo:', 'PIV Photo:', 'Basement Photo:', 'Elevator Photo:', 'AED Photo:', 'EMS Photo:'];
+    const fromDom = Array.from(content.querySelectorAll('.kv .k'))
       .map(el => (el.textContent || '').trim())
       .filter(Boolean)
       .filter(k => /photo/i.test(k));
-
-    // If page has no explicit photo KV rows yet, seed with our known headers.
-    if (ks.length) return ks;
-    return [
-      'Photo:',
-      'Roof Access Photo:',
-      'Alarm Photo:',
-      'Elevator Shutoff Photo:',
-      'Gas Shutoff Photo:',
-      'Electrical Shutoff Photo:',
-      'Water Shutoff Photo:',
-      'Sprinkler Shutoff Photo:',
-      'Fire Pump Photo:',
-      'Tanks Photo:',
-      'Combustibles Photo:',
-      'Hazmat Photo:'
-    
-      ,'Alpha Photo:',
-      'Bravo Photo:',
-      'Charlie Photo:',
-      'Delta Photo:'
-    ];
+    return Array.from(new Set([...KNOWN, ...fromDom]));
   }
 
   function mount(){
@@ -195,7 +241,23 @@ async function ensureRow(){
       wrap.className = 'upload-wrap';
       wrap.appendChild(btn);
       wrap.appendChild(input);
-      bar.appendChild(wrap);
+      
+      // Prefer placing under the matching photo/value row or thumbnail card
+      (function placeUnderPhoto(){
+        const spot = (typeof findKVRow==='function') ? findKVRow(header) : null;
+        if(spot){
+          (spot.v || spot.row).appendChild(wrap);
+          return;
+        }
+        const anchor = (typeof findPhotoAnchor==='function') ? findPhotoAnchor(header) : null;
+        if(anchor && anchor.parentNode){
+          anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
+          return;
+        }
+        // fallback to section bar (legacy location)
+        bar.appendChild(wrap);
+      })();
+
       // Hide button if field already has a value in current record
       (function initialHide(){
         try{
