@@ -126,7 +126,7 @@ const FIELD_ORDER = {
     'Combustibles Location:', 'Flammables Location:', 'MSDS Location:', 'Hazmat Notes:'
   ],
   other: [
-    'Business Name:', 'Address:', 'Knox Box Location:', 'Closest Hydrant:', 'FDC Location:', 'PIV Location:', 'Contact Name (1):', 'Contact Number (1):', 'Contact Name (2):', 'Contact Number (2):'
+    'Business Name:', 'Address:', 'Knox Box Location:', 'Closest Hydrant:', 'FDC Location:', 'PIV Location:'
   ]
    
 };
