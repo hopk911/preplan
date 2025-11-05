@@ -191,7 +191,7 @@ function _orderFor(sectionId){
     [/^Sprinkler Main Shutoff Location:?$/i,'fire'],
     [/^Roof Type:?$/i,'other'],
     [/^Roof Access Location:?$/i,'other'],
-    [/^\s*Roof Access Photo\s*:?\s*$/i,'other'],
+    [/^\s*Roof Access Photo\s*:?\s*$/i,'bldg'],
     [/^(standpipe|riser|fire pump|alarm|pull|extinguisher|ladder|stair|roof|pre plan|knox)/i,'fire'],
     [/(^| )(elevators?|lift|elevator bank|elevator key|elevator room|elev\b)/i,'elevators'],
     [/(^| )(ems|aed|narcan|medical)/i,'ems'],
