@@ -168,7 +168,7 @@ function _orderFor(sectionId){
     [/^Bravo Photo:?$/i,'other'],
     [/^Charlie Photo:?$/i,'other'],
     [/^Delta Photo:?$/i,'other'],
-    [/^Square Footage:?$/i,'staging'],
+    [/^Square Footage:?$/i,'bldg'],
     [/^Ladder:?$/i,'staging'],
     [/^Engine:?$/i,'staging'],
     [/^Tanker:?$/i,'staging'],
