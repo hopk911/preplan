@@ -26,21 +26,50 @@ console.log('[bundle] JSONP rows build is active');
   
 function buildImgWithFallback(srcOrId, cls, size){
   if (!srcOrId) return '';
-  const w = size || 600;
-  const id = extractDriveId(srcOrId);
-  const driveThumb = id ? ('https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w' + w) : String(srcOrId);
-  const webapp = (window.WEBAPP_URL||'').replace(/\/$/,'');
-  const good = !!(webapp && /^https:\/\/script\.google\.com\//.test(webapp) && webapp.length > 40);
-  const proxied = (good && id) ? (webapp + '?id=' + encodeURIComponent(id) + '&w=' + w) : '';
+  const w   = size || 600;
+  const id  = extractDriveId(srcOrId);
   const klass = cls ? (' ' + cls) : '';
-  if (proxied) {
-    // Proxy FIRST; if it fails, fall back to Drive thumb
-    const onerr = "this.onerror=null;this.src='" + driveThumb.replace("'", "\\'") + "'";
-    return '<img src="' + proxied + '" onerror="' + onerr + '" class="thumb' + klass + '" loading="lazy" alt="photo">';
+
+  // Build the two possible URLs (proxy + Drive CDN), same as before
+  const driveThumb = id
+    ? ('https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w' + w)
+    : String(srcOrId);
+
+  const webapp = (window.WEBAPP_URL||'').replace(/\/$/,'');
+  const good   = !!(webapp && /^https:\/\/script\.google\.com\//.test(webapp) && webapp.length > 40);
+  const proxied = (good && id) ? (webapp + '?fn=img&id=' + encodeURIComponent(id) + '&w=' + w) : '';
+
+  // ---- sessionStorage cache (keyed by Drive file id) ----
+  let cached = '';
+  if (id) {
+    try { cached = sessionStorage.getItem('photo:' + id) || ''; } catch(_) {}
   }
-  return '<img src="' + driveThumb + '" class="thumb' + klass + '" loading="lazy" alt="photo">';
+
+  // Choose initial src (prefer cached -> proxy -> driveThumb)
+  const initialSrc = cached || (proxied || driveThumb);
+
+  // onerror: switch to the other source
+  const onerr = proxied
+    ? ("this.onerror=null;this.src='" + driveThumb.replace("'", "\'") + "'")
+    : ("this.onerror=null;this.src='" + proxied.replace("'", "\'") + "'");
+
+  // onload: write back to cache
+  const onload = id
+    ? ("try{sessionStorage.setItem('photo:" + id + "', this.src)}catch(e){}")
+    : "";
+
+  // data-pid helps debugging/inspection
+  return '<img'
+      + ' src="' + initialSrc + '"'
+      + (id ? (' data-pid="' + id + '"') : '')
+      + ' class="thumb' + klass + '"'
+      + ' loading="lazy" decoding="async"'
+      + (onload ? (' onload="' + onload + '"') : '')
+      + ' onerror="' + onerr + '"'
+      + ' alt="photo">';
 }
-  var loadThumbsWithin = function(){ /* no-op in drive-only mode */ };
+
+var loadThumbsWithin = function(){ /* no-op in drive-only mode */ };
 // ---------- Sections & routing ----------
  const SECTION_CONFIG = [
   { id:'other',     label:'Other',     color:'other'     },
