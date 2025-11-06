@@ -106,7 +106,7 @@ async function ensureRow(){
     const sid = (typeof ensureSID==='function' ? ensureSID() : getSID());
     if (!sid) throw new Error('Missing Stable ID');
     try{
-      await postForm({ fn:'save', payload: JSON.stringify({ [SID_HEADER]:sid, [SID_LABEL]:sid }) });
+      await postForm({ fn:'savefield', stableId:sid, field:SID_HEADER, value:sid });
     }catch(_){ /* ignore */ }
     return sid;
   }

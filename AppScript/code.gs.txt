@@ -211,12 +211,15 @@ function handleSave_(src) {
     });
     if (changed) sh.getRange(1, 1, 1, headers.length).setValues([headers]);
 
-    // Build row in header order
-    var outRow = new Array(headers.length);
-    for (var c = 0; c < headers.length; c++) {
-      var h = headers[c];
-      outRow[c] = payload.hasOwnProperty(h) ? payload[h] : '';
-    }
+    // Build row in header order (MERGE: keep existing cell if payload omits it)
+var outRow = new Array(headers.length);
+var currentRow = values[targetRow - 1] || [];
+for (var c = 0; c < headers.length; c++) {
+  var h = headers[c];
+  outRow[c] = (payload.hasOwnProperty(h))
+    ? payload[h]                    // explicit write (including '')
+    : (currentRow[c] !== undefined ? currentRow[c] : '');
+}
 
     sh.getRange(targetRow, 1, 1, headers.length).setValues([outRow]);
     return { ok: true, saved: true, row: targetRow, key: keyVal };
