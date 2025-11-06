@@ -164,7 +164,7 @@ function _orderFor(sectionId){
     { key:'business',  label:'Business Name',    getter:r=>getField(r,['Business Name:']) },
     { key:'address',   label:'Address',          getter:r=>getField(r,['Address:']) },
     { key:'knox',      label:'Knox Box Location',getter:r=>getField(r,['Knox Box Location:']) },
-    { key:'fdc',      label:'FDC',              getter:r=>getField(r,['FDC:']) },
+    { key:'fdc',      label:'FDC Location',              getter:r=>getField(r,['FDC Location:']) },
     { key:'hydrant',   label:'Closest Hydrant',  getter:r=>getField(r,['Closest Hydrant:']) }
   ];
 
