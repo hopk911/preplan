@@ -435,3 +435,6 @@ html.hide-wide-cols #dataTable td:nth-child(6){
     display: none !important;
   }
 }
+
+/* Hide per-field upload shells when flagged */
+.upload-wrap[hidden]{display:none !important;}

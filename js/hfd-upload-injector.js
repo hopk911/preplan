@@ -264,7 +264,8 @@ function ensureBar(id){
           const rec = window._currentRecord || {};
           const key = /:$/.test(header) ? header : (header + ':');
           const val = String(rec[key] || rec[header] || '').trim();
-          wrap.hidden = !!val;
+          const hasTile = !!document.querySelector('.thumb-grid [data-photo-field="' + header + '"]');
+          wrap.hidden = !!val || hasTile;
         }catch(_){}
       })();
 
@@ -335,7 +336,8 @@ hideWait();
     try{
       const f = e && e.detail && e.detail.field ? String(e.detail.field) : '';
       if (!f) return;
-      const btn = modal.querySelector('[data-hfd-upload="' + f + '"]');
+      const f2 = /:$/.test(f) ? f.slice(0,-1) : (f+':');
+      const btn = modal.querySelector('[data-hfd-upload="' + f + '"]') || modal.querySelector('[data-hfd-upload="' + f2 + '"]');
       if (!btn) return;
       const shell = btn.closest('.upload-wrap');
       if (!shell) return;
