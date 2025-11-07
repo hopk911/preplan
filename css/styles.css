@@ -438,3 +438,15 @@ html.hide-wide-cols #dataTable td:nth-child(6){
 
 /* Hide per-field upload shells when flagged */
 .upload-wrap[hidden]{display:none !important;}
+
+
+/* --- Sortable Columns --- */
+th.sortable { cursor: pointer; position: relative; user-select: none; }
+th.sortable::after {
+  content: '⇅';
+  font-size: 0.8em;
+  opacity: 0.3;
+  margin-left: 6px;
+}
+th.sorted-asc::after { content: '↑'; opacity: 0.6; }
+th.sorted-desc::after { content: '↓'; opacity: 0.6; }

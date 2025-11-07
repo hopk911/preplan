@@ -1,3 +1,4 @@
+window._allData = window._allData || [];
 /* HFD Pre-Plan — single-file bundle
    - Merges: drive-only thumbnail helper + main app logic
    - No prototype monkey-patching; no duplicate globals
@@ -33,9 +34,9 @@ function isOffline(){ return (typeof navigator!=='undefined' && navigator && nav
   function extractDriveId(input){
     if (!input) return '';
     const s = String(input).trim();
-    let m = s.match(/[?&]id=([a-zA-Z0-9_-]{10,})/); if (m) return m[1];
-    m = s.match(/\/d\/([a-zA-Z0-9_-]{10,})/);     if (m) return m[1];
-    m = s.match(/^([a-zA-Z0-9_-]{20,})$/);         if (m) return m[1];
+    let m = s.match(/[?&]id=([a-zA-Z0-9_-]{20,60})/); if (m) return m[1];
+    m = s.match(/\/d\/([a-zA-Z0-9_-]{20,60})/);     if (m) return m[1];
+    m = s.match(/^([a-zA-Z0-9_-]{20,60})$/);         if (m) return m[1];
     return '';
   }
   
@@ -168,6 +169,58 @@ function _orderFor(sectionId){
     { key:'hydrant',   label:'Closest Hydrant',  getter:r=>getField(r,['Closest Hydrant:']) }
   ];
 
+// === SORTING SUPPORT (guarded; only Business Name + Address) ===
+(function(){
+  if (window.__HFD_SORT_INIT__) return;
+  window.__HFD_SORT_INIT__ = true;
+  const ALLOWED = new Set(['business','address']);
+  let state = { key: null, asc: true };
+  window.sortByColumn = function(key){
+    if (!ALLOWED.has(key)) return;
+    const data = Array.isArray(rows) ? rows : (Array.isArray(window._allRows) ? window._allRows.slice() : []);
+    if (!data.length) return;
+    if (state.key === key) state.asc = !state.asc; else { state.key = key; state.asc = true; }
+    const col = (TABLE_COLUMNS || []).find(c => c.key === key);
+    const getter = col && col.getter ? (r => (col.getter(r) || '')) : (r => (r[key] || ''));
+    const asc = state.asc ? 1 : -1;
+    data.sort((a,b)=>{
+  const av = String(getter(a)||'').toLowerCase();
+  const bv = String(getter(b)||'').toLowerCase();
+  const aEmpty = av.trim()==='';
+  const bEmpty = bv.trim()==='';
+  if (aEmpty && bEmpty) return 0;
+  if (aEmpty) return 1;   // blanks to end
+  if (bEmpty) return -1;  // blanks to end
+  return state.asc ? av.localeCompare(bv) : bv.localeCompare(av);
+});
+    rows = data.slice(); try{ window._allRows = rows.slice(); }catch(_){}; try{ page=0; }catch(_){ } if (typeof renderTable==='function') renderTable();
+    try{ document.querySelectorAll('#dataTable thead th').forEach(th=>{ th.classList.remove('sorted-asc','sorted-desc'); if (th.dataset.key===key){ th.classList.add(state.asc ? 'sorted-asc':'sorted-desc'); }}); }catch(_){}
+    try{
+      document.querySelectorAll('#dataTable thead th').forEach(th=>{
+        th.classList.remove('sorted-asc','sorted-desc');
+        if (th.dataset.key === key) th.classList.add(state.asc ? 'sorted-asc' : 'sorted-desc');
+        th.classList.toggle('sortable', ALLOWED.has(th.dataset.key||''));
+      });
+    }catch(_){}
+  };
+  window.attachHeaderSortHandlers = function(){
+  try{
+    document.querySelectorAll('#dataTable thead th').forEach(th=>{
+      const key = th.dataset.key || '';
+      const allowed = ALLOWED.has(key);
+      th.classList.toggle('sortable', allowed);
+      // No per-TH click handlers here; delegated handler on #tableHead does the job.
+      if (th.dataset.boundSort) delete th.dataset.boundSort;
+    });
+  }catch(_){}
+};
+})();
+
+
+
+
+
+
   const BASE_HIDE_IN_MODAL = ['timestamp', 'time stamp', 'stable id', 'stableid'];
   const normalizeKey = k => String(k||'').toLowerCase().replace(/[:\s]+$/,'').replace(/[^a-z0-9]+/g,' ').trim();
   const isHiddenInModal = k => {
@@ -217,7 +270,7 @@ function _orderFor(sectionId){
     [/(^| )(water|hydrant|shutoff.*water)/i,'water'],
     [/(^| )(electric|electrical|panel|generator|shutoff.*electric)/i,'electric'],
     [/(^| )(gas|meter|propane|shutoff.*gas)/i,'gas'],
-    [/(^| )(haz|msds|chemical|tank|combustible|flammable)/i,'hazmat'],
+    [/(^| )(haz|msds|chemical|tank|combustible|flammable)/i,'hazmat']
   ];
   function sectionForField(label){
     let h = String(label||'').trim();
@@ -310,7 +363,7 @@ function _orderFor(sectionId){
     const candidates = [];
     const pushParts = (val,h)=>{
       if(!val) return;
-      String(val).split(/[\,\r\n]+|\s{2,}/).forEach(part=>{
+      String(val).split(/[\,\r\n]+|\s{2}/).forEach(part=>{
         const p=String(part).trim(); if(p) candidates.push({url:p, header:h||''});
       });
     };
@@ -326,6 +379,41 @@ function _orderFor(sectionId){
   const tableHead = $('tableHead'), tableBody = $('tableBody');
   const prevPage  = $('prevPage'), nextPage = $('nextPage'), pageInfo = $('pageInfo');
   const btnAdd    = $('btnAdd'), searchInput = $('searchInput');
+
+// delegated sort handler
+/* delegated sort handler */
+try{
+  document.getElementById('tableHead').addEventListener('click', function(e){
+    const th = e.target.closest('th');
+    if (!th) return;
+    const key = th.dataset.key || '';
+    if (!key) return;
+    if (th.classList && !th.classList.contains('sortable')) return;
+    if (typeof window.sortByColumn === 'function') window.sortByColumn(key);
+  }, { passive:true });
+}catch(_){}
+
+  
+  
+// Build / refresh the table <thead>
+function renderTableHead(){
+  try{
+    const head = document.getElementById('tableHead');
+    if(!head) return;
+    const cols = [
+      { label: 'Photo',             key: '__photo__', sortable: false },
+      { label: 'Business Name',     key: 'business',  sortable: true  },
+      { label: 'Address',           key: 'address',   sortable: true  },
+      { label: 'Closest Hydrant',   key: 'hydrant',   sortable: false },
+      { label: 'Knox Box Location', key: 'knox',      sortable: false }
+    ];
+    head.innerHTML = '<tr>' + cols.map(c =>
+      `<th data-key="${c.key}" class="${c.sortable ? 'sortable':''}">${c.label}</th>`
+    ).join('') + '</tr>';
+    if (typeof attachHeaderSortHandlers==='function') attachHeaderSortHandlers();
+  }catch(_){}
+}
+
   const modal=$('recordModal'),modalTitle=$('modalTitle'),modalContent=$('modalContent'),sectionNav=$('sectionNav');
   const btnCloseModal=$('btnCloseModal'),backdrop=$('modalBackdrop');
   // --- Delete-on-X for photo tiles (delegated) ---
@@ -403,8 +491,11 @@ function ensureHeaders(){
 }
 
 
-  function renderTable(){
-    tableHead.innerHTML = '<tr>'+TABLE_COLUMNS.map(c=>'<th>'+c.label+'</th>').join('')+'</tr>';
+  try{ window._allData = Array.isArray(rows) ? rows.slice() : []; }catch(_){ }
+  try{ window.attachHeaderSortHandlers && window.attachHeaderSortHandlers(); }catch(_){ }
+
+
+function renderTable(dataOverride){
     const start=page*PAGE_SIZE; const slice=rows.slice(start,start+PAGE_SIZE);
     tableBody.innerHTML = slice.map((r,i)=>{
       const tds = TABLE_COLUMNS.map(col=>{
@@ -492,7 +583,7 @@ function renderPhotosBlock(items){
       if(isHiddenInModal(h)) continue;
       const sec=sectionForField(h);
       if(/photo/i.test(String(h))){
-        const urls=String(rec[h]||'').split(/[\,\r\n]+|\s{2,}|,\s*/).filter(Boolean);
+        const urls=String(rec[h]||'').split(/[\,\r\n]+|\s{2}|,\s*/).filter(Boolean);
         for(const u of urls) buckets[sec].photos.push({url:u, sectionId:sec, header:h});
       } else {
         const val=String(rec[h]??''); buckets[sec].kv.push({h:h, html: renderKV(h,val)});
@@ -549,6 +640,7 @@ btnEdit.addEventListener('click',()=>{ if(selectedIndex>=0) openModal(); });
 
   // Bootstrap
   (async function init(){
+    renderTableHead();
     const data=await loadData(); window._allRows=data; buildHeaders(data); rows=data.slice(); renderTable();
   
 function findStableKey(headersArr){ const CANON='Stable ID'; const hit=(headersArr||[]).find(h=> String(h||'').toLowerCase().replace(/[:\s]+$/,'').trim()==='stable id'); return hit||CANON; }
@@ -685,7 +777,7 @@ function discardDraftIfNeeded(){ try{ const rec=rows[selectedIndex]; if(rec && r
     'FDC Photo:',
     'Fire Pump Photo:',
     'Electrical Shutoff Photo:',
-    'Gas Shutoff Photo:',
+    'Gas Shutoff Photo:'
 
   ];
 

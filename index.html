@@ -180,7 +180,7 @@ var modal = document.getElementById('recordModal');
 
 
   <script>
-    if ('serviceWorker' in navigator) {
+    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
       window.addEventListener('load', function() {
         navigator.serviceWorker.register('/js/sw.js').catch(function(e){ console.warn('SW reg failed', e); });
       });
