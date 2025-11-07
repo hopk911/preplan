@@ -879,3 +879,67 @@ function discardDraftIfNeeded(){ try{ const rec=rows[selectedIndex]; if(rec && r
     });
   }
 })();
+
+// ---------- Lightweight image lightbox (works inside modal + table) ----------
+(function(){
+  const modal = document.getElementById('recordModal');
+  const host  = modal || document.body;
+
+  // Create overlay once
+  let lb = document.getElementById('imgLightbox');
+  if (!lb){
+    lb = document.createElement('div');
+    lb.className = 'img-lightbox';
+    lb.id = 'imgLightbox';
+    lb.innerHTML = '<button class="close" aria-label="Close">✕</button><img alt="preview">';
+    host.appendChild(lb);
+  }
+  const lbImg = lb.querySelector('img');
+  const lbClose = lb.querySelector('.close');
+
+  // Helper: upsize Google Drive / proxy thumbs to a larger width
+  function bigSrc(src){
+    if (!src) return src;
+    try{
+      // Apps Script proxy ?id=...&w=600  -> bump to w=1600
+      if (/script\.google\.com\/.*[?&]id=/.test(src)){
+        return src.replace(/([?&])w=\d+/,'$1w=1600');
+      }
+      // Drive thumb ...thumbnail?id=...&sz=w600 -> w1600
+      if (/drive\.google\.com\/thumbnail\?/.test(src)){
+        return src.replace(/([?&])sz=w\d+/,'$1sz=w1600');
+      }
+    }catch(_){}
+    return src;
+  }
+
+  function openLightbox(src){
+    lbImg.src = bigSrc(src || '');
+    lb.classList.add('open');
+    document.body.classList.add('lightbox-open');
+  }
+  function closeLightbox(){
+    lb.classList.remove('open');
+    lbImg.removeAttribute('src');
+    document.body.classList.remove('lightbox-open');
+  }
+
+  lb.addEventListener('click', (e)=>{
+    // click backdrop or ✕ closes
+    if (e.target === lb || e.target === lbClose) closeLightbox();
+  });
+  document.addEventListener('keydown', (e)=>{
+    if (e.key === 'Escape' && lb.classList.contains('open')) closeLightbox();
+  });
+
+  // Delegate clicks from table and modal content
+  function isThumb(el){ return el && (el.classList.contains('thumb') || el.classList.contains('tbl-thumb')); }
+  document.addEventListener('click', (e)=>{
+    const img = e.target && (isThumb(e.target) ? e.target : (e.target.closest ? e.target.closest('img.thumb, img.tbl-thumb') : null));
+    if (!img) return;
+    // prevent table row click from firing when zooming
+    e.stopPropagation();
+    e.preventDefault();
+    openLightbox(img.currentSrc || img.src);
+  }, { capture:true });
+})();

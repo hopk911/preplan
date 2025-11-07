@@ -450,3 +450,13 @@ th.sortable::after {
 }
 th.sorted-asc::after { content: '↑'; opacity: 0.6; }
 th.sorted-desc::after { content: '↓'; opacity: 0.6; }
+
+
+/* --- Image Lightbox (on top of modal) --- */
+.img-lightbox{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.85);z-index:4000;padding:24px}
+.img-lightbox.open{display:flex}
+.img-lightbox img{max-width:92vw;max-height:92vh;display:block;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.img-lightbox .close{position:absolute;top:14px;right:16px;border:0;background:transparent;
+  font-size:28px;line-height:1;color:#fff;cursor:pointer}
+.thumb, .tbl-thumb{cursor:zoom-in}
