@@ -400,19 +400,15 @@ function renderTableHead(){
   try{
     const head = document.getElementById('tableHead');
     if(!head) return;
-    const cols = [
-      { label: 'Photo',             key: '__photo__', sortable: false },
-      { label: 'Business Name',     key: 'business',  sortable: true  },
-      { label: 'Address',           key: 'address',   sortable: true  },
-      { label: 'Closest Hydrant',   key: 'hydrant',   sortable: false },
-      { label: 'Knox Box Location', key: 'knox',      sortable: false }
-    ];
-    head.innerHTML = '<tr>' + cols.map(c =>
-      `<th data-key="${c.key}" class="${c.sortable ? 'sortable':''}">${c.label}</th>`
-    ).join('') + '</tr>';
-    if (typeof attachHeaderSortHandlers==='function') attachHeaderSortHandlers();
+    head.innerHTML =
+      '<tr>' + (TABLE_COLUMNS || []).map(c => {
+        const isSortable = (c.key === 'business' || c.key === 'address');
+        return `<th data-key="${c.key}" class="${isSortable ? 'sortable' : ''}">${c.label}</th>`;
+      }).join('') + '</tr>';
+    if (typeof attachHeaderSortHandlers === 'function') attachHeaderSortHandlers();
   }catch(_){}
 }
+
 
   const modal=$('recordModal'),modalTitle=$('modalTitle'),modalContent=$('modalContent'),sectionNav=$('sectionNav');
   const btnCloseModal=$('btnCloseModal'),backdrop=$('modalBackdrop');
