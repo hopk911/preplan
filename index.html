@@ -84,14 +84,13 @@
   </section>
 
   <dialog id="recordModal" class="modal" role="dialog" aria-modal="true">
-    <div class="modal-head">
+    <div class="modal-head" style="flex-wrap:wrap;">
       <div id="modalThumbWrap" class="modal-thumb"></div>
       <h3 id="modalTitle">Record</h3>
       <div class="modal-actions"><span id="editBadge" class="edit-badge" hidden>Editing</span><span id="saveBadge" class="save-badge" hidden>Saved ✓</span><button id="btnModalEdit" class="btn">Edit</button>
       <button id="btnCloseModal" class="btn secondary">Close</button></div>
-    </div>
-    <div id="sectionNav" class="section-nav"></div>
-    <div id="modalContent" class="modal-content"></div>
+    <div style="flex-basis:100%;height:0"></div>
+    <div id="sectionNav" class="section-nav"></div></div><div id="modalContent" class="modal-content"></div>
   </dialog>
   <div id="modalBackdrop" class="modal-backdrop" hidden></div>
 

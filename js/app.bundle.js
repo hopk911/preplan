@@ -59,16 +59,16 @@ function buildImgWithFallback(srcOrId, cls, size){
   var loadThumbsWithin = function(){ /* no-op in drive-only mode */ };
 // ---------- Sections & routing ----------
  const SECTION_CONFIG = [
-  { id:'other',     label:'Other',     color:'other'     },
+  { id:'other',     label:'Other',     color:'other' },
   { id:'bldg',      label:'Building Construction', color:'bldg' },
-  { id:'staging',   label:'Apparatus Staging', color:'staging' }, // ← added
-  { id:'fire',      label:'Fire',      color:'fire'      },
+  { id:'staging',   label:'Apparatus Staging', color:'staging' },
+  { id:'fire',      label:'Fire',      color:'fire' },
+  { id:'water',     label:'Water',     color:'water' },
+  { id:'electric',  label:'Electric',  color:'electric' },
+  { id:'gas',       label:'Gas',       color:'gas' },
   { id:'elevators', label:'Elevators', color:'elevators' },
-  { id:'ems',       label:'EMS',       color:'ems'       },
-  { id:'water',     label:'Water',     color:'water'     },
-  { id:'electric',  label:'Electric',  color:'electric'  },
-  { id:'gas',       label:'Gas',       color:'gas'       },
-  { id:'hazmat',    label:'Hazmat',    color:'hazmat'    }
+  { id:'hazmat',    label:'Hazmat',    color:'hazmat' },
+  { id:'ems',       label:'EMS',       color:'ems' }
 ];
 
 ;(()=>{

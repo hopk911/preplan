@@ -175,7 +175,7 @@ body.modal-open {
   background: #fff;
   justify-content: center;
   padding: 10px 16px;
-  border-bottom: 1px solid var(--line);
+  
 }
 .modal-content .section-nav .chip { margin: 0 6px; }
 
@@ -241,7 +241,9 @@ body.modal-open {
 }
 
 /* Defensive: make section header nav sticky padding tweaks if needed */
-#sectionNav { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+#sectionNav {
+  /* line removed */  padding-bottom: 0;  
+}
 
 /* ===== END PATCH (styles.patch.css) ===== */
 
@@ -304,11 +306,12 @@ body.modal-open {
 
 /* Lock the section nav to the top of the modal content */
 #sectionNav{
+  /* line removed */ 
   position: sticky;           /* keeps it fixed within the scrolling container */
   top: 0;
   z-index: 100;
   background: #fff;           /* ensure it doesn't show content behind while sticky */
-  border-bottom: 1px solid #e5e7eb;
+  
 }
 
 /* Ensure the sections stop below the sticky nav when scrolled into view */
@@ -660,7 +663,7 @@ th.sorted-desc::after { content: '↓'; opacity: 0.6; }
   top: calc(env(safe-area-inset-top, 0px) + var(--modal-head-h));
   z-index: 105;
   background: #fafafa;
-  border-bottom: 1px solid var(--line);
+  
   padding-top: 8px;
   padding-bottom: 8px;
   min-height: var(--section-nav-h);
@@ -804,7 +807,7 @@ input[type="search"]:focus,
   top: calc(env(safe-area-inset-top, 0px) + var(--modal-head-h));
   z-index: 109;
   background: #fff;
-  border-bottom: 1px solid var(--line);
+  
 }
 
 /* Ensure scrolling/jump links don't hide under pinned bars */
@@ -825,7 +828,7 @@ input[type="search"]:focus,
   top: calc(env(safe-area-inset-top, 0px) + var(--modal-head-h, 60px));
   z-index: 109;
   background: #fff;
-  border-bottom: 1px solid var(--line);
+  
   transform: translateZ(0);
 }
 #recordModal .modal-content{
