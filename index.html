@@ -41,6 +41,21 @@
   </style>
 </head>
 <body>
+
+<!-- Password Modal -->
+<div id="pwModal" class="pw-modal" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
+    <h3 id="pwTitle">Enter Password</h3>
+    <p class="muted">Enter your password to make changes.</p>
+    <label class="sr-only" for="pwInput">Password</label>
+    <input id="pwInput" type="password" autocomplete="current-password" placeholder="Password" />
+    <div class="actions">
+      <button id="pwCancel" class="btn secondary">Cancel</button>
+      <button id="pwOk" class="btn">OK</button>
+    </div>
+  </div>
+</div>
+
   <!-- Offline banner -->
   <div id="offlineBanner" class="offline-banner" hidden>You're offline — showing last saved data.</div>
 
@@ -72,7 +87,7 @@
     <div class="modal-head">
       <div id="modalThumbWrap" class="modal-thumb"></div>
       <h3 id="modalTitle">Record</h3>
-      <div class="modal-actions"><button id="btnModalEdit" class="btn">Edit</button>
+      <div class="modal-actions"><span id="editBadge" class="edit-badge" hidden>Editing</span><span id="saveBadge" class="save-badge" hidden>Saved ✓</span><button id="btnModalEdit" class="btn">Edit</button>
       <button id="btnCloseModal" class="btn secondary">Close</button></div>
     </div>
     <div id="sectionNav" class="section-nav"></div>
@@ -208,5 +223,31 @@ var modal = document.getElementById('recordModal');
       setState();
     })();
   </script>
+
+<script>
+// Online/offline banner toggling
+(function(){
+  function setBanner(show, text){
+    try{
+      var el = document.getElementById('offlineBanner');
+      if (!el) return;
+      if (text) el.textContent = text;
+      el.hidden = !show;
+    }catch(_){}
+  }
+  function update(){
+    if (navigator.onLine === false){
+      setBanner(true, "You're offline — showing last saved data.");
+    } else {
+      // Hide when online; the data-layer may re-show if needed
+      setBanner(false);
+    }
+  }
+  window.addEventListener('online', update);
+  window.addEventListener('offline', update);
+  document.addEventListener('DOMContentLoaded', update);
+})();
+</script>
+
 </body>
 </html>

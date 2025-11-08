@@ -126,34 +126,84 @@ function buildSelect(options, currentValue){
     btn.textContent = 'Edit';
     content.querySelectorAll('.kv .v').forEach(v => v.removeAttribute('contenteditable'));
   }
+// hotfix: hide editing/saved badges when exiting edit mode
+try{ (function(){ 
+  var b=document.getElementById('editBadge'); if(b){ b.hidden=true; b.classList.remove('show'); }
+  var s=document.getElementById('saveBadge'); if(s){ s.hidden=true; s.classList.remove('show'); }
+})(); }catch(_){}
 
-  async function getEditToken() {
-    clearEditToken();
-    if (!window.WEBAPP_URL) { alert('WEBAPP_URL is not set'); throw new Error('No WEBAPP_URL'); }
-
-    const pw = window.prompt('Enter edit password:');
-    if (!pw) throw new Error('Password required');
-
-    function jsonp(url){
-      return new Promise((resolve, reject) => {
-        const cb = '__hfd_cb_' + Math.random().toString(36).slice(2);
-        window[cb] = (data) => { try{ delete window[cb]; }catch(_){}; s.remove(); resolve(data); };
-        const s = document.createElement('script');
-        s.onerror = () => { try{ delete window[cb]; }catch(_){}; s.remove(); reject(new Error('JSONP failed')); };
-        s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
-        document.head.appendChild(s);
-      });
-    }
-
-    const url = window.WEBAPP_URL + '?fn=authedit&pw=' + encodeURIComponent(pw);
-    const res = await jsonp(url);
-    if (!res || !res.ok || !res.token) { alert('Invalid password'); throw new Error('Invalid password'); }
-
-    setToken(res.token);
-    return res.token;
-  }
 
   
+async function getEditToken() {
+  clearEditToken();
+  if (!window.WEBAPP_URL) { alert('WEBAPP_URL is not set'); throw new Error('No WEBAPP_URL'); }
+
+  // Try modal if present
+  const modal = document.getElementById('pwModal');
+  /* HFD PW-IN-DIALOG HOTFIX */
+  try{
+    const dlg = document.getElementById('recordModal');
+    if (dlg && dlg.hasAttribute('open') && modal && modal.parentElement !== dlg){
+      dlg.appendChild(modal);
+      modal.classList.add('in-dialog');
+    }
+  }catch(_){}
+
+  const input = document.getElementById('pwInput');
+  const okBtn = document.getElementById('pwOk');
+  const cancelBtn = document.getElementById('pwCancel');
+
+  let pw = '';
+  if (modal && input && okBtn && cancelBtn){
+    pw = await new Promise((resolve, reject)=>{
+      function cleanup(){
+        try{ okBtn.removeEventListener('click', onOK); }catch(_){}
+        try{ cancelBtn.removeEventListener('click', onCancel); }catch(_){}
+        try{ input.removeEventListener('keydown', onKey); }catch(_){}
+        modal.hidden = true;
+      }
+      function onOK(){
+        const v = (input.value||'').trim();
+        cleanup();
+        resolve(v);
+      }
+      function onCancel(){
+        cleanup();
+        reject(new Error('Password required'));
+      }
+      function onKey(e){
+        if (e.key === 'Enter'){ onOK(); }
+        if (e.key === 'Escape'){ onCancel(); }
+      }
+      modal.hidden = false;
+      input.value='';
+      setTimeout(()=>{ try{ input.focus(); }catch(_){ } }, 30);
+      okBtn.addEventListener('click', onOK);
+      cancelBtn.addEventListener('click', onCancel);
+      input.addEventListener('keydown', onKey);
+    });
+  } else {
+    // Fallback to prompt if modal not available
+    pw = window.prompt('Enter edit password:');
+    if (!pw) throw new Error('Password required');
+  }
+
+  function jsonp(url){
+    return new Promise((resolve, reject) => {
+      const cb = '__hfd_cb_' + Math.random().toString(36).slice(2);
+      window[cb] = (data) => { try{ delete window[cb]; }catch(_){ } s.remove(); resolve(data); };
+      const s = document.createElement('script');
+      s.onerror = () => { try{ delete window[cb]; }catch(_){ } s.remove(); reject(new Error('JSONP failed')); };
+      s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
+      document.head.appendChild(s);
+    });
+  }
+  const url = window.WEBAPP_URL + '?fn=authedit&pw=' + encodeURIComponent(pw);
+  const res = await jsonp(url);
+  if (!res || !res.ok || !res.token) { alert('Invalid password'); throw new Error('Invalid password'); }
+  setToken(res.token);
+  return res.token;
+}
 function genSID(){
   const d = new Date();
   const z = n => String(n).padStart(2,'0');
@@ -331,3 +381,152 @@ function ensureSID(){
 
   console.log('[popup-edit.js] ready. WEBAPP_URL:', WEBAPP_URL);
 })();
+
+
+// /* hotfix: badge sync */
+(function(){
+  var modal = document.getElementById('recordModal');
+  var badge = document.getElementById('editBadge');
+  if(!modal || !badge) return;
+  function sync(){
+    var on = modal.classList.contains('editing');
+    badge.hidden = !on;
+    if (!on) badge.classList.remove('show');
+  }
+  // run at start, on DOM ready, on class change, and when dialog open attr flips
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', sync); else sync();
+  new MutationObserver(sync).observe(modal, { attributes:true, attributeFilter:['class','open'] });
+})();
+
+
+
+
+
+// === HFD: Chip order (safe modal-scoped) — 2025-11-07 ===
+// Order: bldg, staging, fire, water, electric, gas, elevators, hazmat, ems, other
+(function(){
+  'use strict';
+  try{
+    const DESIRED = ['bldg','staging','fire','water','electric','gas','elevators','hazmat','ems','other'];
+
+    function keyFor(el){
+      try{
+        const d = el && el.dataset ? el.dataset : {};
+        return (d.color || d.id || (el.textContent||'')).toString().trim().toLowerCase();
+      }catch(_){ return ''; }
+    }
+    function idxFor(el){
+      const i = DESIRED.indexOf(keyFor(el));
+      return i >= 0 ? i : DESIRED.length + 1;
+    }
+    function reorderOnce(nav){
+      try{
+        if (!nav) return;
+        const chips = Array.from(nav.querySelectorAll('.chip'));
+        if (chips.length <= 1) return;
+        const frag = document.createDocumentFragment();
+        chips.sort((a,b)=> idxFor(a) - idxFor(b)).forEach(c=>frag.appendChild(c));
+        nav.appendChild(frag);
+      }catch(_){ /* never throw */ }
+    }
+
+    function install(){
+      const dlg = document.getElementById('recordModal');
+      if (!dlg) return;
+      const obs = new MutationObserver((muts)=>{
+        for (const m of muts){
+          if (m.type === 'attributes' && m.attributeName === 'open' && dlg.hasAttribute('open')){
+            const nav = document.getElementById('sectionNav');
+            setTimeout(()=>{ reorderOnce(nav); }, 0);
+          }
+        }
+      });
+      obs.observe(dlg, { attributes:true, attributeFilter:['open'] });
+      dlg.__hfdOrderObs = obs;
+    }
+
+    if (document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', install, { once:true });
+    }else{
+      setTimeout(install, 0);
+    }
+  }catch(_){ /* never throw */ }
+})();
+
+
+// === Measure sticky elements for exact offsets (no tuck-under) — 2025-11-07 ===
+(function(){
+  'use strict';
+  function setStickyVars(){
+    const dlg  = document.getElementById('recordModal');
+    if (!dlg) return;
+    const head = dlg.querySelector('.modal-head');
+    const nav  = dlg.querySelector('.section-nav');
+
+    const headH = head ? head.offsetHeight : 56;
+    const navH  = nav  ? nav.offsetHeight  : 40;
+
+    document.documentElement.style.setProperty('--modal-head-h', headH + 'px');
+    document.documentElement.style.setProperty('--section-nav-h', navH + 'px');
+  }
+
+  // When modal opens (attribute changes), measure after content paints
+  const dlg = document.getElementById('recordModal');
+  if (dlg && !dlg.__hfdStickyObs){
+    const obs = new MutationObserver((muts)=>{
+      for (const m of muts){
+        if (m.type === 'attributes' && m.attributeName === 'open' && dlg.hasAttribute('open')){
+          requestAnimationFrame(setStickyVars);
+          setTimeout(setStickyVars, 250); // catch async adjustments
+        }
+      }
+    });
+    obs.observe(dlg, { attributes: true, attributeFilter: ['open'] });
+    dlg.__hfdStickyObs = obs;
+  }
+
+  // Keep values fresh on resize/rotation/zoom
+  window.addEventListener('resize', setStickyVars, { passive: true });
+})();
+
+
+// === Precise sticky offsets (outer height, no tuck-under) — 2025-11-07 ===
+(function(){
+  'use strict';
+  function outerH(el){
+    if (!el) return 0;
+    const r  = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    const mt = parseFloat(cs.marginTop)||0, mb = parseFloat(cs.marginBottom)||0;
+    const bt = parseFloat(cs.borderTopWidth)||0, bb = parseFloat(cs.borderBottomWidth)||0;
+    return Math.ceil(r.height + mt + mb + bt + bb + 1); // +1 to avoid subpixel gaps
+  }
+  function setStickyVars(){
+    const dlg  = document.getElementById('recordModal');
+    if (!dlg) return;
+    const head = dlg.querySelector('.modal-head');
+    const nav  = dlg.querySelector('.section-nav');
+    const headH = outerH(head) || 60;
+    const navH  = outerH(nav)  || 40;
+    document.documentElement.style.setProperty('--modal-head-h', headH + 'px');
+    document.documentElement.style.setProperty('--section-nav-h',  navH + 'px');
+  }
+
+  const dlg = document.getElementById('recordModal');
+  if (dlg && !dlg.__hfdStickyObs3){
+    const obs = new MutationObserver((muts)=>{
+      for (const m of muts){
+        if (m.type === 'attributes' && m.attributeName === 'open' && dlg.hasAttribute('open')){
+          // measure after paint and after async layout (fonts/images/buttons)
+          requestAnimationFrame(setStickyVars);
+          setTimeout(setStickyVars, 120);
+          setTimeout(setStickyVars, 400);
+        }
+      }
+    });
+    obs.observe(dlg, { attributes: true, attributeFilter: ['open'] });
+    dlg.__hfdStickyObs3 = obs;
+  }
+  window.addEventListener('resize', setStickyVars, { passive: true });
+})();
+

@@ -460,3 +460,375 @@ th.sorted-desc::after { content: '↓'; opacity: 0.6; }
 .img-lightbox .close{position:absolute;top:14px;right:16px;border:0;background:transparent;
   font-size:28px;line-height:1;color:#fff;cursor:pointer}
 .thumb, .tbl-thumb{cursor:zoom-in}
+
+
+/* --- Password modal (simple overlay) --- */
+.pw-modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:2000}
+.pw-modal[hidden]{display:none}
+.pw-modal .box{background:#fff;border-radius:14px;min-width:300px;max-width:420px;padding:18px;border:1px solid var(--line);box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.pw-modal h3{margin:0 0 6px}
+.pw-modal .muted{color:var(--muted);margin:0 0 10px}
+.pw-modal input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:10px}
+.pw-modal .actions{display:flex;gap:10px;justify-content:flex-end}
+.sr-only{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
+
+/* Buttons polish */
+.btn:hover{filter:brightness(0.98)}
+.btn:focus{outline:2px solid var(--primary);outline-offset:2px}
+
+/* Subtle modal header shadow */
+.modal-head{box-shadow:0 1px 0 rgba(0,0,0,.06)}
+
+
+/* Ensure password modal overlays the <dialog> content when rendered inside it */
+.pw-modal.in-dialog{
+  position:absolute;
+  inset:0;
+  background:rgba(0,0,0,.45);
+  z-index: 10000; /* above dialog internals */
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.pw-modal.in-dialog[hidden]{ display:none; }
+.pw-modal.in-dialog .box{ max-width:420px; min-width:300px; }
+.edit-badge[hidden], .save-badge[hidden]{display:none !important;}
+
+
+/* === NAV OPTION C — OUTLINE BY DEFAULT, FILLED WHEN ACTIVE (compact) — 2025-11-07 === */
+
+/* Compact sizing just for chips (about half height & smaller font) */
+:root{
+  --chip-font-size: 13px;
+  --chip-pad-y: 5px;
+  --chip-pad-x: 10px;
+  --chip-radius: 8px;
+}
+.section-nav .chip{
+  background: transparent;
+  color: #111;
+  border: 1px solid var(--line);
+  border-radius: var(--chip-radius);
+  padding: var(--chip-pad-y) var(--chip-pad-x);
+  font-size: var(--chip-font-size);
+  line-height: 1.1;
+  min-height: 28px;       /* roughly half of the previous visual height */
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+/* Per-color outlines */
+.section-nav .chip[data-color="fire"]{ border-color: var(--c-fire); }
+.section-nav .chip[data-color="ems"]{ border-color: var(--c-ems); }
+.section-nav .chip[data-color="water"]{ border-color: var(--c-water); }
+.section-nav .chip[data-color="electric"]{ border-color: var(--c-electric); }
+.section-nav .chip[data-color="gas"]{ border-color: var(--c-gas); }
+.section-nav .chip[data-color="hazmat"]{ border-color: var(--c-hazmat); }
+.section-nav .chip[data-color="elevators"]{ border-color: var(--c-elevators); }
+.section-nav .chip[data-color="other"]{ border-color: var(--c-other); }
+.section-nav .chip[data-color="bldg"]{ border-color: var(--c-bldg); }
+.section-nav .chip[data-color="staging"]{ border-color: #374151; }
+
+/* Active = filled with white text; no size change */
+.section-nav .chip[aria-current="true"],
+.section-nav .chip[data-active="true"]{
+  color: #fff;
+  border-color: transparent;
+  text-shadow: 0 1px 0 rgba(0,0,0,.18);
+  box-shadow: 0 1px 6px rgba(0,0,0,.08) inset;
+}
+.section-nav .chip[aria-current="true"][data-color="fire"]{ background: var(--c-fire); }
+.section-nav .chip[aria-current="true"][data-color="ems"]{ background: var(--c-ems); }
+.section-nav .chip[aria-current="true"][data-color="water"]{ background: var(--c-water); }
+.section-nav .chip[aria-current="true"][data-color="electric"]{ background: var(--c-electric); }
+.section-nav .chip[aria-current="true"][data-color="gas"]{ background: var(--c-gas); }
+.section-nav .chip[aria-current="true"][data-color="hazmat"]{ background: var(--c-hazmat); }
+.section-nav .chip[aria-current="true"][data-color="elevators"]{ background: var(--c-elevators); }
+.section-nav .chip[aria-current="true"][data-color="other"]{ background: var(--c-other); }
+.section-nav .chip[aria-current="true"][data-color="bldg"]{ background: var(--c-bldg); }
+.section-nav .chip[aria-current="true"][data-color="staging"]{ background: #374151; }
+
+/* Hover/active polish & focus ring */
+.section-nav .chip:hover  { background: rgba(0,0,0,.02); }
+.section-nav .chip:active { background: rgba(0,0,0,.04); }
+.section-nav .chip:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.9), 0 0 0 4px rgba(37,99,235,.45);
+}
+
+
+
+/* === Defensive overlay pointer-events fix (2025-11-07) === */
+.upload-wait{ pointer-events: none; }              /* when hidden via display:none; keep safe */
+.upload-wait[style*="display: flex"]{ pointer-events: auto; } /* interactive only when shown */
+
+
+/* === NAV CHIPS WHITE BACKGROUND (2025-11-07) === */
+.section-nav .chip{
+  background: #fff !important;
+  color: #111 !important;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-weight: 600;
+  transition: background-color .15s ease, color .15s ease;
+}
+
+/* Keep border colors for distinction */
+.section-nav .chip[data-color="fire"]{ border-color: var(--c-fire); }
+.section-nav .chip[data-color="ems"]{ border-color: var(--c-ems); }
+.section-nav .chip[data-color="water"]{ border-color: var(--c-water); }
+.section-nav .chip[data-color="electric"]{ border-color: var(--c-electric); }
+.section-nav .chip[data-color="gas"]{ border-color: var(--c-gas); }
+.section-nav .chip[data-color="hazmat"]{ border-color: var(--c-hazmat); }
+.section-nav .chip[data-color="elevators"]{ border-color: var(--c-elevators); }
+.section-nav .chip[data-color="other"]{ border-color: var(--c-other); }
+.section-nav .chip[data-color="bldg"]{ border-color: var(--c-bldg); }
+.section-nav .chip[data-color="staging"]{ border-color: #374151; }
+
+/* Active state: light gray background */
+.section-nav .chip[aria-current="true"],
+.section-nav .chip[data-active="true"]{
+  background: #f3f4f6 !important;
+  color: #000 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06) inset;
+}
+
+
+/* === NAV CHIPS — COLORED BACKGROUNDS + WHITE TEXT (reverted) — 2025-11-07 === */
+.section-nav .chip{
+  background: var(--chip-bg, #111) !important;
+  color: #fff !important;
+  border: 1px solid transparent !important;
+  text-shadow: 0 1px 0 rgba(0,0,0,.22);
+}
+
+/* Per-section backgrounds (restore original color fills) */
+.section-nav .chip[data-color="fire"]      { --chip-bg: var(--c-fire); }
+.section-nav .chip[data-color="ems"]       { --chip-bg: var(--c-ems); }
+.section-nav .chip[data-color="water"]     { --chip-bg: var(--c-water); }
+.section-nav .chip[data-color="electric"]  { --chip-bg: var(--c-electric); }
+.section-nav .chip[data-color="gas"]       { --chip-bg: var(--c-gas); }
+.section-nav .chip[data-color="hazmat"]    { --chip-bg: var(--c-hazmat); }
+.section-nav .chip[data-color="elevators"] { --chip-bg: var(--c-elevators); }
+.section-nav .chip[data-color="other"]     { --chip-bg: var(--c-other); }
+.section-nav .chip[data-color="bldg"]      { --chip-bg: var(--c-bldg); }
+.section-nav .chip[data-color="staging"]   { --chip-bg: var(--c-staging, #374151); }
+
+/* Active/current chip: maintain color, add subtle inner emphasis */
+.section-nav .chip[aria-current="true"],
+.section-nav .chip[data-active="true"]{
+  box-shadow: inset 0 1px 6px rgba(0,0,0,.12), 0 1px 8px rgba(0,0,0,.10);
+  filter: none;
+}
+
+
+/* === SECTION NAV: faint top line + padding (2025-11-07) === */
+.modal-content .section-nav{
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+
+/* === PIN NAV HEADERS — NEVER SCROLL AWAY (2025-11-07) === */
+/* Shared sizing to keep things aligned */
+:root{
+  --modal-head-h: 56px;     /* adjust if your modal header is taller */
+  --section-nav-h: 40px;    /* approximate chip bar height in compact mode */
+}
+
+/* Ensure the app header itself never scrolls away (page-level) */
+.app-header{
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px));
+  z-index: 100;
+  background: #fff;
+}
+
+/* Inside the record modal: pin the top bar and the chip navigation */
+#recordModal .modal-head{
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px));
+  z-index: 110;               /* above section-nav */
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Chip navigation stays pinned directly under the modal head */
+#recordModal .modal-content .section-nav{
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + var(--modal-head-h));
+  z-index: 105;
+  background: #fafafa;
+  border-bottom: 1px solid var(--line);
+  padding-top: 8px;
+  padding-bottom: 8px;
+  min-height: var(--section-nav-h);
+}
+
+/* Optional: create a tiny spacer after the chip bar so content doesn't crowd under it */
+#recordModal .modal-content .section-nav + *{
+  scroll-margin-top: calc(var(--modal-head-h) + var(--section-nav-h) + 8px);
+}
+
+
+/* === TABLE POLISH PACK (2025-11-07) ===================================== */
+
+/* 0) Table "card" surface */
+#dataTable{
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 8px rgba(0,0,0,.06);
+  overflow: hidden; /* clip zebra/hover at rounded corners */
+}
+
+/* 1) Header: soft background + slight elevation */
+#dataTable thead th{
+  background: linear-gradient(to bottom, #ffffff, #f5f7fa);
+  font-weight: 700;
+  position: sticky; /* optional sticky header; remove if not desired */
+  top: 0;
+  z-index: 2;
+  box-shadow: 0 1px 0 rgba(0,0,0,.05);
+}
+
+/* 2) Zebra striping + thin row dividers */
+#dataTable tbody tr:nth-child(even){ background: #fafbfc; }
+#dataTable tbody tr{ border-bottom: 1px solid rgba(0,0,0,.05); }
+#dataTable tbody tr:last-child{ border-bottom: 0; }
+
+/* 3) Hover feedback */
+#dataTable tbody tr:hover{
+  background-color: #eef4ff; /* gentle blue tint */
+}
+
+/* 4) Tighter vertical rhythm */
+#dataTable td, #dataTable th{
+  padding: 10px 14px;
+}
+
+/* 5) First-column thumbnail polish */
+#dataTable tbody td:first-child img{
+  display: block;
+  width: 64px; height: 64px; object-fit: cover;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.10);
+}
+
+/* 6) Subtle separation from surrounding content */
+#dataTable{ margin-top: 8px; }
+
+
+/* === LOW-GLARE THEME PASS (2025-11-07) =============================== */
+/* 1) Page background: reduce stark white */
+body{
+  background: #f3f4f6; /* slate-100 */
+}
+
+/* 2) Elevate the table card slightly more */
+#dataTable{
+  background: #ffffff;
+  box-shadow: 0 6px 24px rgba(0,0,0,.06), 0 2px 6px rgba(0,0,0,.05);
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,.06);
+}
+
+/* 3) Sticky header tint a touch stronger */
+#dataTable thead th{
+  background: linear-gradient(to bottom, #f7f9fc, #eef2f7);
+  color: #111;
+  box-shadow: 0 1px 0 rgba(0,0,0,.06);
+}
+
+/* 4) Zebra striping slightly darker; hover more apparent */
+#dataTable tbody tr:nth-child(odd){  background: #f8fafc; }  /* blue-50 */
+#dataTable tbody tr:nth-child(even){ background: #f1f5f9; }  /* slate-100 */
+#dataTable tbody tr:hover{ background: #e7eefc; }            /* stronger hover */
+
+/* 5) Row separators a hair darker for definition */
+#dataTable tbody tr{ border-bottom: 1px solid rgba(0,0,0,.07); }
+
+/* 6) Compact the vertical rhythm just a touch */
+#dataTable td, #dataTable th{ padding: 9px 14px; }
+
+/* 7) Search input soft styling — covers common selectors */
+#searchInput,
+input[type="search"],
+.search input{
+  background: #eef2f7;
+  border: 1px solid #d0d7e2;
+  color: #111;
+  border-radius: 10px;
+  padding: 10px 12px;
+  outline: none;
+  transition: box-shadow .15s ease, border-color .15s ease, background-color .15s ease;
+}
+#searchInput::placeholder,
+input[type="search"]::placeholder,
+.search input::placeholder{
+  color: #6b7280;
+}
+#searchInput:focus,
+input[type="search"]:focus,
+.search input:focus{
+  background: #e8edf6;
+  border-color: #9fb7e6;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, .20);
+}
+
+/* 8) First-column image frame slightly stronger so it reads on tinted rows */
+#dataTable tbody td:first-child img{
+  border: 1px solid rgba(0,0,0,.06);
+  box-shadow: 0 1px 3px rgba(0,0,0,.12);
+}
+
+
+/* === STICKY MODAL HEAD + CHIP BAR (no tuck-under) — 2025-11-07 === */
+:root{
+  --modal-head-h: 56px;   /* JS will overwrite with measured value */
+  --section-nav-h: 40px;  /* JS will overwrite with measured value */
+}
+
+#recordModal .modal-head{
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 110;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+}
+
+#recordModal .modal-content .section-nav{
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + var(--modal-head-h));
+  z-index: 109;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Ensure scrolling/jump links don't hide under pinned bars */
+#recordModal .modal-content{
+  scroll-padding-top: calc(var(--modal-head-h) + var(--section-nav-h) + 8px);
+}
+
+
+/* === STICKY MODAL HEAD + CHIP BAR — PRECISE (no tuck-under) — 2025-11-07 === */
+:root{
+  --modal-head-h: 60px;   /* will be overwritten by JS measurement */
+  --section-nav-h: 40px;  /* will be overwritten by JS measurement */
+}
+#recordModal .modal-head{ margin: 0; }
+#recordModal .modal-content .section-nav{
+  margin: 0;
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + var(--modal-head-h, 60px));
+  z-index: 109;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+  transform: translateZ(0);
+}
+#recordModal .modal-content{
+  scroll-padding-top: calc(var(--modal-head-h, 60px) + var(--section-nav-h, 40px) + 8px);
+}
+
